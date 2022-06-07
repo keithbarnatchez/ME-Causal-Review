@@ -1,7 +1,7 @@
 # ----------------------
 rm(list=ls())
 library(mvtnorm)
-
+1
 logit <- function(x) {
   return( log( x/(1-x) ) )
 }
