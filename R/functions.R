@@ -28,11 +28,11 @@ meas_model <- function(X,sig_u) {
 tmt_model <- function(X,Z,
                       ax = .5,
                       az = .5,
-                      a0 = 0.5) {
+                      a0 = 0) {
   #' Generates treatment model for T with error-prone exposure X and 
   #' properly-measured exposure Z
   
-  p_tmt <- expit(bx*X + bz*Z)
+  p_tmt <- expit(a0 + ax*X + az*Z)
   T <- rbinom(length(X),size=1,prob=p_tmt) 
   return(T)
 }

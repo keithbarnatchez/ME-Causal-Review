@@ -47,7 +47,8 @@ psc <- function(data,v_idx) {
                       1/data$ps2,
                       1/(1-data$ps2))
   
-  return(data)
+  # thinking about returning altered df but for now returning ipw
+  return(data$iptw)
 }
 
 # -------------------------------------------
@@ -61,16 +62,20 @@ simex_indirect <- function(data, v_idx) {
   # Estimate ME variance
   sig_u_hat <- sd(data$X[which(v_idx==1)] - data$W[which(v_idx==1)])
   
+  # Run SIMEX on PS coefficient
   ps_model <- glm(T ~ W + Z, data=data, family='binomial', x=TRUE)
   simex_model <- simex(model=ps_model,
                        SIMEXvariable = "W",
                        measurement.error = sig_u_hat)
   
+  # Get weights
+  e_hat <- predict(simex_model,type='response')
+  w_hat <- ifelse(data$T==1,
+                  1/e_hat,
+                  1/(1-e_hat))
   
+  return(w_hat)
 }
-
-
-
 
 
 
@@ -82,10 +87,16 @@ n <- 10000
 v_share <- 0.1
 v_idx <- rbinom(n,size=1,prob=v_share)
 
-data <- generate_data(n)
+data <- generate_data(n,sig_u = 0.2)
 data_iptw <- psc(data,v_idx)
+
+simex_weights <- simex_indirect(data,v_idx)
 
 
 lm(Y ~ T + Z + W, data=data_iptw)
-lm(Y ~ T, data=data_iptw, weights=data_iptw$iptw)
-lm(Y ~ T, data=data_iptw, weights=data_iptw$iptw2)
+lm(Y ~ T + Z + X, data=data_iptw)
+lm(Y ~ T+0, data=data_iptw, weights=data_iptw$iptw)
+lm(Y ~ T+0, data=data_iptw, weights=data_iptw$iptw2)
+lm(Y ~ T+0, data=data_iptw, weights=simex_weights)
+
+
