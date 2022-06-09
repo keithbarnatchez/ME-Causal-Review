@@ -1,7 +1,7 @@
 # ----------------------
 rm(list=ls())
 library(mvtnorm)
-1
+
 logit <- function(x) {
   return( log( x/(1-x) ) )
 }
@@ -26,8 +26,9 @@ meas_model <- function(X,sig_u) {
 }
 
 tmt_model <- function(X,Z,
-                      bx = .5,
-                      bz = .5) {
+                      ax = .5,
+                      az = .5,
+                      a0 = 0.5) {
   #' Generates treatment model for T with error-prone exposure X and 
   #' properly-measured exposure Z
   
@@ -55,8 +56,10 @@ generate_covariates <- function(n, rho) {
 
 generate_data <- function(n,
                        sig_e=1,
-                       sig_u=1.1,
-                       rho=0.5) {
+                       sig_u=0.1,
+                       rho=0.5,
+                       ax=0.5,az=0.5,a0=0,
+                       bt=1,bx=1,bz=1,b0=0) {
   #' Generates dataset with outcome variable y, error-prone exposure X with 
   #' measurements W, binary treatment of interest T, and confounding variable Z.
   #' For now, I'm assuming homoskedasticity in the outcome and measurement error
@@ -76,10 +79,10 @@ generate_data <- function(n,
   X <- covariates[,1] ; Z <- covariates[,2]
   
   # Simulate treatment process
-  T <- tmt_model(X,Z)
+  T <- tmt_model(X,Z,ax,az,a0)
   
   # Simulate outcome 
-  Y <- outcome_model(T,X,Z)
+  Y <- outcome_model(T,X,Z,bt,bx,bx,b0,sig_e)
   
   # Simulate error-prone measurements
   W <- meas_model(X, sig_u) 

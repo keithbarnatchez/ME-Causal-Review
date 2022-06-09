@@ -1,6 +1,20 @@
-#-------
+# -------------------------------------------
+# CAUSAL ME CORRECTION FUNCTIONS
+# -------------------------------------------
 
+
+# -------------------------------------------
+# PROPENSITY SCORE CALIBRATION
+# -------------------------------------------
 psc <- function(data,v_idx) {
+  #' Implements the Sturmer propensity score calibration approach
+  #' INPUTS:
+  #' - data: Analysis dataset obtained from the generate_data() function. 
+  #'         
+  #' - v_idx: Logical vector marking observations that are part of validation
+  #'          dataset
+  #' OUTPUTS:
+  #' - Dataset containing IPTW weights obtained via PSC
   
   # Fit propensity score models in validation data
   val_data <- data[which(v_idx==1),]
@@ -35,6 +49,34 @@ psc <- function(data,v_idx) {
   
   return(data)
 }
+
+# -------------------------------------------
+#  SIMEX
+# -------------------------------------------
+
+simex_indirect <- function(data, v_idx) {
+  #' Implements the indirect SIMEX adjustment described in Kyle et al. (2016)
+  #' 
+  
+  # Estimate ME variance
+  sig_u_hat <- sd(data$X[which(v_idx==1)] - data$W[which(v_idx==1)])
+  
+  ps_model <- glm(T ~ W + Z, data=data, family='binomial', x=TRUE)
+  simex_model <- simex(model=ps_model,
+                       SIMEXvariable = "W",
+                       measurement.error = sig_u_hat)
+  
+  
+}
+
+
+
+
+
+
+
+
+
 
 n <- 10000
 v_share <- 0.1
