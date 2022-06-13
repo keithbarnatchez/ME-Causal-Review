@@ -1,7 +1,3 @@
-# ----------------------
-rm(list=ls())
-library(mvtnorm)
-
 logit <- function(x) {
   return( log( x/(1-x) ) )
 }
@@ -43,6 +39,7 @@ outcome_model <- function(T,X,Z,
                           bz = 1,
                           b0 = 0,
                           sig_e = 1) {
+  #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z
   
   mu <- b0 + bt*T + bx*X + bz*Z
   
@@ -51,6 +48,9 @@ outcome_model <- function(T,X,Z,
 }
 
 generate_covariates <- function(n, rho) {
+  #' Generate X and Z from multivariate normal dist with specified covariance
+  #' rho
+  
   return( rmvnorm(n, sigma = matrix(c(1,rho,rho,1),nrow=2,byrow=T)) )
 }
 
@@ -69,10 +69,12 @@ generate_data <- function(n,
   #' - n: sample size
   #' - sig_e: outcome model variance
   #' - sig_u: measurement error variance
-  #' - rho: correlation b/w error-prone exposure and 
+  #' - rho: correlation b/w error-prone exposure and error-free covariate 
+  #' - ax, az, a0: coefficients on x, z and intercept in PS model
+  #' - bt, bx, bz, b0: coefficients on t, x, z and intercept in outcome model
   #' 
   #' OUTPUTS:
-  #' 
+  #' - simulated dataset
   
   # Simulate covariates
   covariates <- generate_covariates(n,rho)

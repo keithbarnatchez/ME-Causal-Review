@@ -6,7 +6,7 @@
 # -------------------------------------------
 # PROPENSITY SCORE CALIBRATION
 # -------------------------------------------
-psc <- function(data,v_idx) {
+psc_implement <- function(data,v_idx) {
   #' Implements the Sturmer propensity score calibration approach
   #' INPUTS:
   #' - data: Analysis dataset obtained from the generate_data() function. 
@@ -51,11 +51,21 @@ psc <- function(data,v_idx) {
   return(data$iptw)
 }
 
+psc <- function(data, v_idx) {
+  
+  # Get weights
+  data$iptw <- psc_implement(data, v_idx)
+  
+  # Estimate ATE
+  ATE <- lm(Y ~ T, weights = data$iptw, data=data)$coefficients[2]
+  return(ATE)
+}
+
 # -------------------------------------------
 #  SIMEX
 # -------------------------------------------
 
-simex_indirect <- function(data, v_idx) {
+simex_indirect_implement <- function(data, v_idx) {
   #' Implements the indirect SIMEX adjustment described in Kyle et al. (2016)
   #' 
   
@@ -77,26 +87,12 @@ simex_indirect <- function(data, v_idx) {
   return(w_hat)
 }
 
-
-
-
-
-
-
-n <- 10000
-v_share <- 0.1
-v_idx <- rbinom(n,size=1,prob=v_share)
-
-data <- generate_data(n,sig_u = 0.2)
-data_iptw <- psc(data,v_idx)
-
-simex_weights <- simex_indirect(data,v_idx)
-
-
-lm(Y ~ T + Z + W, data=data_iptw)
-lm(Y ~ T + Z + X, data=data_iptw)
-lm(Y ~ T+0, data=data_iptw, weights=data_iptw$iptw)
-lm(Y ~ T+0, data=data_iptw, weights=data_iptw$iptw2)
-lm(Y ~ T+0, data=data_iptw, weights=simex_weights)
-
-
+simex_indirect <- function(data, v_idx) {
+  
+  # Get weights
+  data$iptw <- simex_indirect_implement(data,v_idx)
+  
+  # Estimate ATE
+  ATE <- lm(Y ~ T, weights=data$iptw,data=data)$coefficients[2]
+  
+}
