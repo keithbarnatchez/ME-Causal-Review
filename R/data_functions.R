@@ -47,19 +47,22 @@ outcome_model <- function(T,X,Z,
   
 }
 
-generate_covariates <- function(n, rho) {
+generate_covariates <- function(n, rho, psi) {
   #' Generate X and Z from multivariate normal dist with specified covariance
   #' rho
   
-  return( rmvnorm(n, sigma = matrix(c(1,rho,rho,1),nrow=2,byrow=T)) )
+  return( rmvnorm(n, sigma = matrix(c(1,  rho, psi,
+                                      rho,  1,   0,
+                                      psi,  0,   1),nrow=3,byrow=T)) )
 }
 
 generate_data <- function(n,
                        sig_e=1,
                        sig_u=0.1,
-                       rho=0.5,
+                       rho=0.5, psi=0.5,
                        ax=0.5,az=0.5,a0=0,
-                       bt=1,bx=1,bz=1,b0=0) {
+                       bt=1,bx=1,bz=1,b0=0,
+                       v_share=0.1) {
   #' Generates dataset with outcome variable y, error-prone exposure X with 
   #' measurements W, binary treatment of interest T, and confounding variable Z.
   #' For now, I'm assuming homoskedasticity in the outcome and measurement error
@@ -70,15 +73,17 @@ generate_data <- function(n,
   #' - sig_e: outcome model variance
   #' - sig_u: measurement error variance
   #' - rho: correlation b/w error-prone exposure and error-free covariate 
+  #' - psi: correlation b/w error-prone exposure and instrumental variable V
   #' - ax, az, a0: coefficients on x, z and intercept in PS model
   #' - bt, bx, bz, b0: coefficients on t, x, z and intercept in outcome model
   #' 
   #' OUTPUTS:
   #' - simulated dataset
+  #' 
   
   # Simulate covariates
-  covariates <- generate_covariates(n,rho)
-  X <- covariates[,1] ; Z <- covariates[,2]
+  covariates <- generate_covariates(n,rho,psi)
+  X <- covariates[,1] ; Z <- covariates[,2] ; V <- covariates[,3]
   
   # Simulate treatment process
   T <- tmt_model(X,Z,ax,az,a0)
@@ -88,9 +93,11 @@ generate_data <- function(n,
   
   # Simulate error-prone measurements
   W <- meas_model(X, sig_u) 
-    
-  out_data <- data.frame(Y=Y,X=X,T=T,W=W,Z=Z)
   
+  # Get validation data index
+  v_share <- 0.1 # share in validation data
+  v_idx <- rbinom(n,size=1,prob=v_share)
+    
+  out_data <- data.frame(Y=Y,X=X,T=T,W=W,Z=Z,V=V,v_idx=v_idx)
+  return(out_data)
 }
-
-

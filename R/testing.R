@@ -1,20 +1,36 @@
 rm(list=ls())
 library(mvtnorm)
 library(simex)
+library(tidyverse)
+library(mice)
+library(ipw)
 
 # Code folder is root directory in case you're working interactively
 source('correction_functions.R')
 source('data_functions.R')
+source('output_functions.R')
 
 # Simulation code 
 n <- 10000 # obs
-v_share <- 0.1 # share in validation data
-v_idx <- rbinom(n,size=1,prob=v_share) # logical noting which obs are in validation data
 
 # Generate the data
 data <- generate_data(n,sig_u = 0.2)
+data_imp <- data %>% mutate(X=replace(X,v_idx==0,NA)) %>%
+  select(-v_idx)
+
+#-------------------------------------------------
+# Test correction functions 
 
 # Get IPW from different approaches
-iptw_psc <- psc(data,v_idx)
-iptw_simex <- simex_indirect(data,v_idx)
+ate_psc <- psc(data) # propensity score calibration
+ate_iv <- iv_confounder(data) # IV
+ate_mime <- mime(data)
+
+
+# ------------------------------------------------
+# Test the get_results() function
+
+methods <- c('psc','iv')
+sig_u_grid <- c(0.1,0.2,0.3) ; bt_grid <- c(1,2) ; n_grid <- c(100,1000,5000)
+op_chars <- get_results(methods,sig_u_grid,bt_grid,n_grid)
 
