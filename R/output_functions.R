@@ -10,7 +10,7 @@
 #
 #
 
-calc_stats <- function(data,methods,sim_stats,t,s) {
+calc_stats <- function(data,methods,t,s) {
   #' Calculates stats of interest for specified correction methods and updates 
   #' existing dataframe containing stats across simulation iterations
   #'
@@ -27,10 +27,8 @@ calc_stats <- function(data,methods,sim_stats,t,s) {
   # Ideal and naive
   ATE_ideal <- ate_ideal(data) ; ATE_naive <- ate_naive(data)
   bias_ideal <- ATE_ideal-t ; bias_naive <- ATE_naive-t
-  sim_stats <- rbind(sim_stats,
-                     data.frame(bias=bias_ideal,ATE=ATE_ideal,method='Ideal',iteration=s))
-  sim_stats <- rbind(sim_stats,
-                    data.frame(bias=bias_naive,ATE=ATE_naive,method='Naive',iteration=s))
+  stats <- data.frame(bias=bias_ideal,ATE=ATE_ideal,method='Ideal',iteration=s)
+  stats <- rbind(stats, data.frame(bias=bias_naive,ATE=ATE_naive,method='Naive',iteration=s))
                                     
   # SIMEX
   if ('simex_ind' %in% methods) {
@@ -39,31 +37,26 @@ calc_stats <- function(data,methods,sim_stats,t,s) {
     
     # Get bias
     bias <- ATE-t
-    temprow <- data.frame(bias=bias,ATE=ATE,method='simex_ind',iteration=s)
-    sim_stats <- rbind(sim_stats,temprow)
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE,method='simex_ind',iteration=s))
   }
   
   # PSC
   if ('psc' %in% methods) {
     # Get ATE estimate
     ATE <- psc(data)
-    
     bias <- ATE-t
-    temprow <- data.frame(bias=bias,ATE=ATE,method='psc',iteration=s)
-    sim_stats <- rbind(sim_stats,temprow)
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE,method='psc',iteration=s))
   }
   
   # IV 
   if ('iv' %in% methods) {
     # Get ATE estimate
     ATE <- iv_confounder(data)
-    
     bias <- ATE-t
-    temprow <- data.frame(bias=bias,ATE=ATE,method='iv',iteration=s)
-    sim_stats <- rbind(sim_stats,temprow)
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE,method='iv',iteration=s))
   }
   
-  return(sim_stats)
+  return(stats)
 }
 
 
@@ -92,15 +85,17 @@ get_stats_table <- function(methods,
   #'     -
   
   # set up dataframe for calculating operating characteristics by group
-  sim_stats <- data.frame(bias=double(),ATE=double(),method=character(),it=double())
-  for (s in 1:nsim) {
+  sim_stats_list <- lapply(1:nsim, function(s, n, u, t, ...) {
     
     # simulate data for current iteration
     data <- generate_data(n,sig_u=u,bt=t)
     
     # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
-    sim_stats <- calc_stats(data,methods,sim_stats,t,s)
-  } # for s in 1:nsim
+    return(calc_stats(data,methods,t,s))
+    
+  }, n = n, u = u, t = t) # for s in 1:nsim
+  
+  sim_stats <- do.call(rbind, sim_stats_list)
   
   # Compute avg operating characteristics from stats of interest 
   final_stats <- sim_stats %>% group_by(method) %>%
@@ -133,21 +128,25 @@ get_results <- function(methods,
   #' 
   
   # Initialize dataframe for each stat of interest
-  op_chars <- data.frame(bias=double(),                          
-                         method=character(),
-                         mse=double(),
-                         ATE=double())
-  for (u in sig_u_grid) { # loop over ME variances
-  for (t in bt_grid) { # loop over tmt effect sizes
-  for (n in n_grid) {
+  scen_df <- expand.grid(sig_u = sig_u_grid, bt = bt_grid, n = n_grid,
+                         KEEP.OUT.ATTRS = TRUE, stringsAsFactors = FALSE)
   
-    # Get operating characteristics for current grid point
-    stats_df <- get_stats_table(methods,u,t,n,nsim)
-    op_chars <- rbind(op_chars,stats_df)
+  scen_list <- split(scen_df, seq(nrow(scen_df)))
+  
+  op_list <- lapply(scen_list, function(scen, methods, nsim, ...) {
     
-  } # sig_u_grid
-  } # bt_grid
-  } # n_grid
+    u <- scen$sig_u
+    t <- scen$bt
+    n <- scen$n
+    
+    # Get operating characteristics for current grid point
+    op_tmp <- get_stats_table(methods,u,t,n,nsim)
+    return(op_tmp)
+    
+  }, methods = methods, nsim = nsim)
+    
+  op_chars <- do.call(rbind, op_list)
+    
   return(op_chars)
 } # get_results 
 
