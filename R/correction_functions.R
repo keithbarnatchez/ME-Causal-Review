@@ -164,21 +164,28 @@ mime <- function(data,m=20) {
   imps <- mice(data_imp,method='norm.boot',m=m)
   
   # Loop through imputed datasets, estimate PS 
-  betas <- rep(NA,m)
-  ses   <- rep(NA,m)
-  for (d in 1:m) {
+  vals <- sapply(1:m, function(d, imps, ...) {
+    
     # fit propensity score model with d-th dataset
     curr_data <- complete(imps,d)
     ps_hat <- predict(glm(T ~ X + Z,family='binomial',data=curr_data),
                       type='response')
-    w_hat <- ifelse(data$T==1,
+    w_hat <- ifelse(curr_data$T==1,
                     1/ps_hat,
                     1/(1-ps_hat))
     
     # Record ATE estimate and its SE
     ATE <- lm(Y ~ T, data=curr_data,weights=w_hat)
-    betas[d] <- ATE$coefficients[2] 
-    ses[d] <- sqrt(diag(vcov(ATE))[2]) 
-  }
+    beta <- ATE$coefficients[2] 
+    se <- sqrt(diag(vcov(ATE))[2]) 
+    
+    return(c(beta = beta, se = se))
+    
+  }, imps = imps)
+  
+  betas <- vals[1,]
+  ses <- vals[2,]
+  
   return(mean(betas))
+  
 }
