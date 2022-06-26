@@ -29,22 +29,26 @@ tmt_model <- function(X,Z,
   #' properly-measured exposure Z
   
   p_tmt <- expit(a0 + ax*X + az*Z)
-  T <- rbinom(length(X),size=1,prob=p_tmt) 
-  return(T)
+  A <- rbinom(length(X),size=1,prob=p_tmt) 
+  return(A)
 }
 
-outcome_model <- function(T,X,Z,
-                          bt = 1,
+outcome_model <- function(A,X,Z,
+                          ba = 1,
                           bx = 1,
                           bz = 1,
                           b0 = 0,
-                          sig_e = 1) {
+                          sig_e = 1,
+                          binary=0) {
   #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z
   
-  mu <- b0 + bt*T + bx*X + bz*Z
-  
-  return( rnorm(length(X), mean = mu, sd=sig_e))
-  
+  mu <- b0 + ba*A + bx*X + bz*Z
+  if (binary==0) { # if continuous outcome
+    return( rnorm(length(X), mean = mu, sd=sig_e))
+  }
+  else { #if binary outcome
+    return( rbinom(length(X),size=1,prob=expit(mu))  )
+  }
 }
 
 generate_covariates <- function(n, rho, psi) {
@@ -61,8 +65,9 @@ generate_data <- function(n,
                        sig_u=0.1,
                        rho=0.5, psi=0.5,
                        ax=0.5,az=0.5,a0=0,
-                       bt=1,bx=1,bz=1,b0=0,
-                       v_share=0.1) {
+                       ba=1,bx=1,bz=1,b0=0,
+                       v_share=0.1,
+                       binary=0) {
   #' Generates dataset with outcome variable y, error-prone exposure X with 
   #' measurements W, binary treatment of interest T, and confounding variable Z.
   #' For now, I'm assuming homoskedasticity in the outcome and measurement error
@@ -75,7 +80,7 @@ generate_data <- function(n,
   #' - rho: correlation b/w error-prone exposure and error-free covariate 
   #' - psi: correlation b/w error-prone exposure and instrumental variable V
   #' - ax, az, a0: coefficients on x, z and intercept in PS model
-  #' - bt, bx, bz, b0: coefficients on t, x, z and intercept in outcome model
+  #' - ba, bx, bz, b0: coefficients on a, x, z and intercept in outcome model
   #' 
   #' OUTPUTS:
   #' - simulated dataset
@@ -86,10 +91,10 @@ generate_data <- function(n,
   X <- covariates[,1] ; Z <- covariates[,2] ; V <- covariates[,3]
   
   # Simulate treatment process
-  T <- tmt_model(X,Z,ax,az,a0)
+  A <- tmt_model(X,Z,ax,az,a0)
   
   # Simulate outcome 
-  Y <- outcome_model(T,X,Z,bt,bx,bx,b0,sig_e)
+  Y <- outcome_model(A,X,Z,ba,bx,bx,b0,sig_e,binary)
   
   # Simulate error-prone measurements
   W <- meas_model(X, sig_u) 
@@ -98,6 +103,6 @@ generate_data <- function(n,
   v_share <- 0.1 # share in validation data
   v_idx <- rbinom(n,size=1,prob=v_share)
     
-  out_data <- data.frame(Y=Y,X=X,T=T,W=W,Z=Z,V=V,v_idx=v_idx)
+  out_data <- data.frame(Y=Y,X=X,A=A,W=W,Z=Z,V=V,v_idx=v_idx)
   return(out_data)
 }

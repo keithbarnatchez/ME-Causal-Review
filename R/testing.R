@@ -4,6 +4,7 @@ library(simex)
 library(tidyverse)
 library(mice)
 library(ipw)
+library(AER)
 
 # Code folder is root directory in case you're working interactively
 source('correction_functions.R')
@@ -30,7 +31,8 @@ ate_mime <- mime(data)
 # ------------------------------------------------
 # Test the get_results() function
 
-methods <- c('psc','iv')
+methods <- c('iv')
 sig_u_grid <- c(0.1,0.2,0.3) ; bt_grid <- c(1,2) ; n_grid <- c(100,1000,5000)
-op_chars <- get_results(methods,sig_u_grid,bt_grid,n_grid)
+bin_grid <- c(0,1)
+op_chars <- get_results(methods,sig_u_grid,bt_grid,n_grid, bin_grid)
 
