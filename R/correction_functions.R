@@ -27,8 +27,9 @@ psc_implement <- function(data) {
   val_data$gs_ps <- predict(gs_ps_mod, type='response')
   
   # Fit model relating gold-standard PS to error-prone PS
-  ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
-                      link)
+  # ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
+  #                     link)
+  ps_rel_model <- betareg(gs_ps ~ ep_ps + A + Z, data=val_data)
   
   # Fit propensity score model in main data so it can be projected to GS measure
   # via the model fitted with validation data
@@ -52,17 +53,38 @@ psc_implement <- function(data) {
                       1/(1-data$ps2))
   
   # thinking about returning altered df but for now returning ipw
-  return(data$iptw)
+  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
+  return(ATE_mod)
 }
 
-psc <- function(data) {
+psc_bootstrap <- function(data,nboot) {
+  
+  # Current iteration
+  ests <- rep(NA,nboot)
+  for (b in 1:nboot) {
+    boot_idx <- sample(1:nrow(data),replace=T)
+    curr_mod <-  psc_implement(data[boot_idx,])
+    ests[b] <- curr_mod$coefficients[2]
+  }
+  return(quantile(ests, probs=c(0.025,0.975)))
+}
+
+psc <- function(data,nboot=100) {
   
   # Get weights
-  data$iptw <- psc_implement(data)
+  ATE_mod <- psc_implement(data)
   
   # Estimate ATE
-  ATE <- lm(Y ~ A, weights = data$iptw, data=data)$coefficients[2]
-  return(ATE)
+  ATE <- ATE_mod$coefficients[2]
+  
+  # Bootstrap to obtain confidence interval
+  if (nboot>0) {
+    CI_est <- psc_bootstrap(data,nboot)
+  }
+  
+  results <- list(ATE=ATE,
+                  CI =CI_est)
+  return(results)
 }
 
 # -------------------------------------------
@@ -89,7 +111,7 @@ simex_indirect_implement <- function(data) {
                   1/(1-e_hat))
   
   # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)$coefficients[2]
+  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
   
   return(ATE_mod)
 }
@@ -114,7 +136,7 @@ simex_bootstrap <- function(data, nboot=1e3) {
     return(quantile(ests, probs=c(0.025,0.975)))
 }
 
-simex_indirect <- function(data, bs=T) {
+simex_indirect <- function(data, nboot=1000) {
   #' Implement the indirect SIMEX correction procedure described in Kyle et al.
   #' (2016)
   #'
@@ -129,8 +151,8 @@ simex_indirect <- function(data, bs=T) {
   ATE_mod <- simex_indirect_implement(data)
   ATE_est <- ATE_mod$coefficients[2]
   
-  if (bs==TRUE) {
-    CI_est <- simex_bootstrap()
+  if (nboot>0) {
+    CI_est <- simex_bootstrap(data,nboot)
   }
 }
 
@@ -190,7 +212,8 @@ mime <- function(data,m=20) {
   
   # Turn into missing data problem explicitly by recasting the unobserved X
   # values as missing so that we can use mice
-  data_imp <- data %>% mutate(X = replace(X,v_idx==0,NA))
+  data_imp <- data %>% mutate(X = replace(X,v_idx==0,NA)) %>%
+                       select(-v_idx)
   
   # Run the (congenial) MI procedure
   imps <- mice(data_imp,method='norm.boot',m=m)
@@ -215,9 +238,23 @@ mime <- function(data,m=20) {
     
   }, imps = imps)
   
+  # grab ests and their SEs
   betas <- vals[1,]
   ses <- vals[2,]
   
-  return(mean(betas))
+  # compute SE est 
+  ovr_mean <- mean(betas) 
+  bw_var   <- sum( (betas - ovr_mean)^2 )/(length(betas)-1) # var bw ests
+  wi_var   <- mean(ses) # within variance
+  SE_est <- wi_var + ((1 + (1/length(betas))) * bw_var )
+  CI <- c(-qnorm(.975)*SE_est + ovr_mean,
+          qnorm(.975)*SE_est + ovr_mean)
+  
+  return(list(ATE=ovr_mean,
+              CI=CI))
+  
+}
+ 
+cond_score <- function(data) {
   
 }

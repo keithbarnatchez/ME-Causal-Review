@@ -15,9 +15,8 @@ source('output_functions.R')
 n <- 10000 # obs
 
 # Generate the data
-data <- generate_data(n,sig_u = 0.2)
-data_imp <- data %>% mutate(X=replace(X,v_idx==0,NA)) %>%
-  select(-v_idx)
+data <- generate_data(n,sig_u = 5,binary=1,
+                      ba=0.3)
 
 #-------------------------------------------------
 # Test correction functions 
@@ -26,7 +25,6 @@ data_imp <- data %>% mutate(X=replace(X,v_idx==0,NA)) %>%
 ate_psc <- psc(data) # propensity score calibration
 ate_iv <- iv_confounder(data) # IV
 ate_mime <- mime(data)
-
 
 # ------------------------------------------------
 # Test the get_results() function
