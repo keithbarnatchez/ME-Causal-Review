@@ -26,42 +26,66 @@ calc_stats <- function(data,methods,a,s) {
   
   # Ideal and naive
   ATE_ideal <- ate_ideal(data) ; ATE_naive <- ate_naive(data)
-
+  CI_ideal <- ATE_ideal[[2]] ; CI_naive <- ATE_naive[[2]]
+  
+  # Bias
   bias_ideal <- ATE_ideal[[1]]-a ; bias_naive <- ATE_naive[[1]]-a
-  stats <- data.frame(bias=bias_ideal,ATE=ATE_ideal[[1]],method='Ideal',iteration=s)
-  stats <- rbind(stats, data.frame(bias=bias_naive,ATE=ATE_naive[[1]],method='Naive',iteration=s))
+  
+  # CI coverage
+  ci_cov_ideal <- ifelse( (CI_ideal[1] <= a) & (CI_ideal[2] >= a) , 1, 0  )
+  ci_cov_naive <- ifelse( (CI_naive[1] <= a) & (CI_naive[2] >= a) , 1, 0  )
+  
+  # Power
+  pow_ideal <- ifelse(CI_ideal[[1]]>0 | CI_ideal[[2]] < 0,1,0) 
+  pow_naive <- ifelse(CI_naive[[1]]>0 | CI_naive[[2]] < 0,1,0) 
+  
+  stats <- data.frame(bias=bias_ideal,ATE=ATE_ideal[[1]],ci_cov=ci_cov_ideal,pow=pow_ideal,method='Ideal',iteration=s)
+  stats <- rbind(stats, data.frame(bias=bias_naive,ATE=ATE_naive[[1]],ci_cov=ci_cov_naive,pow=pow_naive,method='Naive',iteration=s))
                          
   # SIMEX
   if ('simex_ind' %in% methods) {
     # Get ATE estimate
-    ATE <- simex_indirect(data)
+    ATE <- simex_indirect(data) 
     
     # Get bias
-    bias <- ATE[[1]]-a
-    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],method='simex_ind',iteration=s))
+    bias <- ATE[[1]]-a ; CI <- ATE[[2]]
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],
+                                     ci_cov=ci_cov,pow=pow,
+                                     method='simex_ind',iteration=s))
   }
   
   # PSC
   if ('psc' %in% methods) {
     # Get ATE estimate
-    ATE <- psc(data)
-    bias <- ATE[[1]]-a
-    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],method='psc',iteration=s))
+    ATE <- psc(data) 
+    bias <- ATE[[1]]-a ; CI <- ATE[[2]]
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
+                                     pow=pow,method='psc',iteration=s))
   }
   
   # IV 
   if ('iv' %in% methods) {
     # Get ATE estimate
     ATE <- iv_confounder(data)
-    bias <- ATE[[1]]-a
-    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],method='iv',iteration=s))
+    bias <- ATE[[1]]-a ; CI <- ATE[[2]]
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
+                                     pow=pow,method='iv',iteration=s))
   }
   
   # MIME 
   if ('mime' %in% methods) {
     ATE <- mime(data)
-    bias <- ATE[[1]]-a
-    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],method='mime',iteration=s))
+    bias <- ATE[[1]]-a ; CI <- ATE[[2]]
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
+                                     pow=pow,method='mime',iteration=s))
   }
   
   return(stats)
@@ -73,7 +97,7 @@ get_stats_table <- function(methods,
                             u,a,n,b,
                             nsim) {
   #' For a given iteration, calculates the following stats of interest:
-  #' - bias, variance, CI coverage
+  #' - bias, MSE, CI coverage
   #' These stats are used to calculate the operating characteristics (across 
   #' all iterations) described in get_results.
   #' 
@@ -85,16 +109,21 @@ get_stats_table <- function(methods,
   #' 
   #' OUTPUTS:
   #' A dataframe with the following variables:
-  #'     -
-  #'     -
-  #'     -
-  #'     -
-  #'     -
-  #'     -
+  #'     - method: method used (psc, iv, etc)
+  #'     - bias: average percent bias
+  #'     - mse: mean squared error
+  #'     - ATE: average ATE estimate
+  #'     - ci_cov: 95% CI coverage (share of CIs containing true ATE)
+  #'     - u: ME variance
+  #'     - a: true ATE
+  #'     - n: sample size
+  #'     - b: whether outcome is binary or not
+  #'     
   
   # set up dataframe for calculating operating characteristics by group
   sim_stats_list <- lapply(1:nsim, function(s, n, u, a, b, ...) {
     
+    print(paste('On iteration',s,'of',nsim))
     
     # simulate data for current iteration
     data <- generate_data(n,sig_u=u,ba=a,binary=b)
@@ -108,9 +137,11 @@ get_stats_table <- function(methods,
 
   # Compute avg operating characteristics from stats of interest 
   final_stats <- sim_stats %>% group_by(method) %>%
-    summarize(bias = mean(bias),
+    summarize(bias = 100*mean(bias)/a,
               mse = mean(bias^2),
-              ATE = mean(ATE))
+              ATE = mean(ATE),
+              ci_cov = 100*mean(ci_cov),
+              power=100*mean(pow))
   
   final_stats$u=u ; final_stats$a=a ; final_stats$n=n ; final_stats$b=b
   return(final_stats)

@@ -6,13 +6,13 @@
 # 3) IV, 4) 
 #
 
-# -------------------------------------------
-# PROPENSITY SCORE CALIBRATION
-# -------------------------------------------
+# ---------------------------------------------------------
+#                PROPENSITY SCORE CALIBRATION
+# ---------------------------------------------------------
 psc_implement <- function(data) {
   #' Implements the Sturmer propensity score calibration approach
   #' INPUTS:
-  #' - data: Analysis dataset obtained from the generate_data() function. 
+  #' - data: Analysis dataset obtained from the generate_data() function
   #'         
   #' - v_idx: Logical vector marking observations that are part of validation
   #'          dataset
@@ -23,19 +23,22 @@ psc_implement <- function(data) {
   val_data <- data[which(data$v_idx==1),]
   ep_ps_mod <- glm(A ~ W + Z, data=val_data,family='binomial') # error-prone
   gs_ps_mod <- glm(A ~ X + Z, data=val_data,family='binomial') # gold standard
-  val_data$ep_ps <- predict(ep_ps_mod, type='response')
-  val_data$gs_ps <- predict(gs_ps_mod, type='response')
+  val_data$ep_ps <- predict(ep_ps_mod, type='response') # predict ep pscores in val data
+  val_data$gs_ps <- predict(gs_ps_mod, type='response') # predict gs pscores in val data
   
   # Fit model relating gold-standard PS to error-prone PS
   # ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
   #                     link)
+  # Note: using beta regressions at the moment to respect 0/1 bounds and to 
+  # prevent issues with weights being negative 
   ps_rel_model <- betareg(gs_ps ~ ep_ps + A + Z, data=val_data)
   
   # Fit propensity score model in main data so it can be projected to GS measure
   # via the model fitted with validation data
   data$ep_ps <- predict(glm(A ~ W + Z, data=data,family='binomial'),
-                        type='response')
-  data$gs_ps_hat <- predict(ps_rel_model,newdata=data,type='response')
+                        type='response') # getting ep pscores in main data
+  # Use the GS-EP pscore model to predict GS pscores in the main data
+  data$gs_ps_hat <- predict(ps_rel_model,newdata=data,type='response') 
   
   # Project X and W
   cal_mod <- lm(X ~ W, data=val_data)
@@ -58,7 +61,14 @@ psc_implement <- function(data) {
 }
 
 psc_bootstrap <- function(data,nboot) {
-  
+  #' Giving a specified number of bootstrap iterations, generates a bootstrap
+  #' confidence interval of the PSC ATE estimate
+  #' INPUTS:
+  #' - data: Analysis dataset obtained from the generate_data() function
+  #' - nboot: Bootstrap iterations
+  #' OUTPUTS:
+  #' - A vector containing the CI lower and upper bounds
+
   # Current iteration
   ests <- rep(NA,nboot)
   for (b in 1:nboot) {
@@ -70,6 +80,9 @@ psc_bootstrap <- function(data,nboot) {
 }
 
 psc <- function(data,nboot=100) {
+  #' Outer function for the propensity score calibration method. Calls
+  #' psc_implement to yield ATE estimate, and psc_bootstrap to obtain con
+  #'
   
   # Get weights
   ATE_mod <- psc_implement(data)
@@ -87,13 +100,13 @@ psc <- function(data,nboot=100) {
   return(results)
 }
 
-# -------------------------------------------
-#  SIMEX
-# -------------------------------------------
+# ---------------------------------------------------------
+#                          SIMEX
+# ---------------------------------------------------------
 
 simex_indirect_implement <- function(data) {
   #' Implements the indirect SIMEX adjustment described in Kyle et al. (2016)
-  #' 
+  #' Called within the simex_indirect() function
   
   # Estimate ME variance
   sig_u_hat <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)])
@@ -125,7 +138,7 @@ simex_bootstrap <- function(data, nboot=1e3) {
     #' - nboot: Number of bootstrap iterations
     #' OUTPUTS:
     #' - A vector containing the lower and upper bound of a 95% CI
-  
+
     # Current iteration
     ests <- rep(NA,nboot)
     for (b in 1:nboot) {
@@ -146,6 +159,8 @@ simex_indirect <- function(data, nboot=1000) {
   #' 
   #' OUTPUTS:
   #' - Estimate of ATE
+  #' REQUIRED PACKAGES:
+  #' - simex
   
   # Get weights for IPTW
   ATE_mod <- simex_indirect_implement(data)
@@ -156,11 +171,21 @@ simex_indirect <- function(data, nboot=1000) {
   }
 }
 
+# --------------------------------------------------------
+#                 Instrumental variables
+# --------------------------------------------------------
+
 iv_confounder <- function(data) {
   #' Implements instrumental variables correction 
   #'
-  #'
-  #'
+  #' INPUTS: 
+  #' - data: A dataframe created with the generate_data() function
+  #' 
+  #' OUTPUTS:
+  #' - A list containing the ATE estimate and confidence interval
+  #' 
+  #' REQUIRED PACKAGES:
+  #' - AER
 
   # Fit the IV model (first and second stage) with AER package
   iv_mod <- ivreg(Y ~ W + Z + A | Z + A + V, data=data)
@@ -168,6 +193,10 @@ iv_confounder <- function(data) {
   return(list(iv_mod$coefficients[4], # point estimate
          confint(iv_mod)[4,])) # confidence interval
 }
+
+# --------------------------------------------------------
+#            Naive and ideal approaches
+# --------------------------------------------------------
 
 ate_ideal <- function(data) {
   #' Computes ATE under ideal conditions (using X, correctly specified model)
@@ -179,7 +208,7 @@ ate_ideal <- function(data) {
                   1/e_hat,
                   1/(1-e_hat))
   # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=w_hat,data=data)$coefficients[2]
+  ATE_mod <- lm(Y ~ A, weights=w_hat,data=data)
   results <- list(ATE_mod$coefficients[2],
                   confint(ATE_mod)[2,])
   return(results)
@@ -187,7 +216,7 @@ ate_ideal <- function(data) {
 
 ate_naive <- function(data) {
   #' Computes ATE when naively using W in place of X in estimating propensity
-  #' scores
+  #' scores, but with otherwisr correctly-specified model
   #' 
   #' Returns ATE estimates
   ps_model <- glm(A ~ W + Z, data=data, family='binomial')
@@ -202,6 +231,10 @@ ate_naive <- function(data) {
   
   return(results)
 }
+
+# --------------------------------------------------------
+#               Multiple imputation
+# --------------------------------------------------------
 
 mime <- function(data,m=20) {
   #' Performs multiple imputation for ME correction, following Webb-Vargas et 
@@ -255,6 +288,10 @@ mime <- function(data,m=20) {
   
 }
  
+# ------------------------------------------------------------
+#              Conditional score approach
+# ------------------------------------------------------------
+
 cond_score <- function(data) {
-  
+  1
 }

@@ -47,7 +47,7 @@ outcome_model <- function(A,X,Z,
     return( rnorm(length(X), mean = mu, sd=sig_e))
   }
   else { #if binary outcome
-    testit::assert( (a<1) & (0<a) ) # make sure effect of a is < 1
+    testit::assert( (ba<1) & (0<ba) ) # make sure effect of a is < 1
     p <- (1-ba)*expit(b0 + bx*X + bz*Z) + ba*A
     return( rbinom(length(X),size=1,prob=p)  )
   }
