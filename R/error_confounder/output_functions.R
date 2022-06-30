@@ -197,6 +197,8 @@ get_results <- function(methods,
   return(op_chars)
 } # get_results 
 
+
+
 bias_plot <- function(results) {
   
   results %>% ggplot(aes(x=bias))

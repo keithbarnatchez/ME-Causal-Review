@@ -29,17 +29,18 @@ psc(data)
 ate_psc <- psc(data) # propensity score calibration 
 ate_iv <- iv_confounder(data) # IV
 ate_mime <- mime(data)
+ate_simex <- simex_indirect(data)
 
 # ------------------------------------------------
 # Test the get_results() function
 
-methods <- c('psc')
+methods <- c('iv')
 sig_u_grid <- c(0.1,0.2,0.3,0.5,0.9) ; bt_grid <- c(1) ; n_grid <- c(5000)
 bin_grid <- c(0)
-op_chars <- get_results(methods,sig_u_grid,bt_grid,n_grid, bin_grid, nsim=10)
+op_chars2 <- get_results(methods,sig_u_grid,bt_grid,n_grid, bin_grid, nsim=100)
 
 # ------------------------------
 # Plot 
 
-op_chars %>% filter(a==1) %>% ggplot(aes(x=u, y=bias, color=method)) + geom_line() +
+op_chars2 %>% filter(a==1) %>% ggplot(aes(x=u, y=bias, color=method)) + geom_line() +
   theme_bw()
