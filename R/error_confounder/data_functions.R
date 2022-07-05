@@ -22,8 +22,8 @@ meas_model <- function(X,sig_u) {
 }
 
 tmt_model <- function(X,Z,
-                      ax = .5,
-                      az = .5,
+                      ax = .25,
+                      az = .25,
                       a0 = 0) {
   #' Generates treatment model for T with error-prone exposure X and 
   #' properly-measured exposure Z

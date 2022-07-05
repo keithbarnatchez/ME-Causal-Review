@@ -32,6 +32,8 @@ line_plot <- function(op_chars,xvar,yvar,
                       fixed_vars=c('u','a','n','b'),
                       fixed_defaults=c(0.3,1,5000,0),
                       var_labs=c('ME variance:', 'True ATE:', 'n:', 'Binary outcome:'),
+                      drop_methods=NULL,
+                      extra_options=NULL,
                       save=FALSE) {
   #' Function for generating plots of operating characteristics
   #'
@@ -41,15 +43,28 @@ line_plot <- function(op_chars,xvar,yvar,
   #' - yvar (bias,mse,ATE,ci_cov,power): A string for y variable
   #' - xlab: x axis title
   #' - ylab: y axis title 
-  #' - save
-  #' - filename
+  #' - drop_methods: A vector of strings for methods you would like to not be 
+  #'                 included in the plot (e.g. could drop the naive method)
+  #' - extra_options: A string containing any additional ggplot options you want
+  #'                  - must be written in ggplot syntax
+  #' - save: A logical that, when set to TRUE, will save a plot in pdf format
+  #'         with the following name convention: <xvar>_<yvar>_<fixedvars/vals>.pdf
+  #'         e.g. u_power_n5000_a1_b0.pdf would be the name of a line plot of
+  #'         power over varying error variance, with n=5000, the ATE=1 and the 
+  #'         outcome being continuous
   #'
   #' OUTPUTS:
   #' Nothing, but will produce a plot in the plotting window if using interactively,
-  #' and will save a file with name format xvar_yvar_data.pdf if save is set to TRUE
+  #' and will save a file if save is set to TRUE
   #' 
   
+  # Use the custom plot theme
   set_plot_theme()
+  
+  # If don't want to include any methods, filter them out
+  for (m in drop_methods) {
+    op_chars <- op_chars %>% filter(method!=m)
+  }
   
   # Prune out the var that's being varied
   drop_idx <- (fixed_vars %in% xvar)   
@@ -94,4 +109,5 @@ line_plot <- function(op_chars,xvar,yvar,
             
 }
 
-line_plot(op_chars,'u','mse',xlab='Error variance',ylab='MSE',plt_title = 'MSE of ME correction methods, varying error variance')
+line_plot(op_chars,'u','bias',xlab='Error variance',ylab='Bias',plt_title = 'MSE of ME correction methods, varying error variance',
+          fixed_defaults = c(0.3,1,5000,0))

@@ -10,7 +10,11 @@
 #                PROPENSITY SCORE CALIBRATION
 # ---------------------------------------------------------
 psc_implement <- function(data) {
-  #' Implements the Sturmer propensity score calibration approach
+  #' Implements a modified Sturmer propensity score calibration approach, where
+  #' the ATE is estimated via IPTW. As such, a beta regression model is assumed
+  #' between the gold standard and naive propensity scores to ensure all predicted
+  #' weights are in (0,1)
+  #'  
   #' INPUTS:
   #' - data: Analysis dataset obtained from the generate_data() function
   #'         
@@ -31,6 +35,8 @@ psc_implement <- function(data) {
   #                     link)
   # Note: using beta regressions at the moment to respect 0/1 bounds and to 
   # prevent issues with weights being negative 
+  n_val <- nrow(val_data)
+  val_data$gs_ps <- (val_data$gs_ps*(n_val-1) + 0.5)/n_val # smithson (2006) transformation to ensure (0,1) not [0,1]
   ps_rel_model <- betareg(gs_ps ~ ep_ps + A + Z, data=val_data)
   
   # Fit propensity score model in main data so it can be projected to GS measure
