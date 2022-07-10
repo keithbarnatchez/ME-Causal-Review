@@ -37,7 +37,7 @@ psc_implement <- function(data) {
   # prevent issues with weights being negative 
   n_val <- nrow(val_data)
   val_data$gs_ps <- (val_data$gs_ps*(n_val-1) + 0.5)/n_val # smithson (2006) transformation to ensure (0,1) not [0,1]
-  ps_rel_model <- betareg(gs_ps ~ ep_ps + A + Z, data=val_data)
+  ps_rel_model <- betareg(gs_ps ~ ep_ps + A, data=val_data)
   
   # Fit propensity score model in main data so it can be projected to GS measure
   # via the model fitted with validation data
@@ -62,11 +62,37 @@ psc_implement <- function(data) {
                       1/(1-data$ps2))
   
   # thinking about returning altered df but for now returning ipw
+  # mean(data$Y * data$A * data$iptw) - mean(data$Y * (1-data$A) * data$iptw) 
   ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
   return(ATE_mod)
 }
 
-psc_bootstrap <- function(data,nboot) {
+psc_implement_reg <- function(data) {
+  # Fit propensity score models in validation data
+  val_data <- data[which(data$v_idx==1),]
+  ep_ps_mod <- glm(A ~ W + Z, data=val_data,family='binomial') # error-prone
+  gs_ps_mod <- glm(A ~ X + Z, data=val_data,family='binomial') # gold standard
+  val_data$ep_ps <- predict(ep_ps_mod, type='response') # predict ep pscores in val data
+  val_data$gs_ps <- predict(gs_ps_mod, type='response') # predict gs pscores in val data
+  
+  # Fit model relating gold-standard PS to error-prone PS
+  # ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
+  #                     link)
+  ps_rel_model <- lm(gs_ps ~ ep_ps + A, data=val_data)
+  
+  # Fit propensity score model in main data so it can be projected to GS measure
+  # via the model fitted with validation data
+  data$ep_ps <- predict(glm(A ~ W + Z, data=data,family='binomial'),
+                        type='response') # getting ep pscores in main data
+  # Use the GS-EP pscore model to predict GS pscores in the main data
+  data$gs_ps_hat <- predict(ps_rel_model,newdata=data,type='response') 
+  
+  # fit the final model
+  ATE_mod <- lm(Y ~ A + gs_ps_hat, data=data)
+  return(list(ps_rel_model,ATE_mod))
+}
+
+psc_bootstrap <- function(data,nboot,iptw) {
   #' Giving a specified number of bootstrap iterations, generates a bootstrap
   #' confidence interval of the PSC ATE estimate
   #' INPUTS:
@@ -79,27 +105,49 @@ psc_bootstrap <- function(data,nboot) {
   ests <- rep(NA,nboot)
   for (b in 1:nboot) {
     boot_idx <- sample(1:nrow(data),replace=T)
-    curr_mod <-  psc_implement(data[boot_idx,])
-    ests[b] <- curr_mod$coefficients[2]
+    
+    if (iptw==1) {
+      curr_mod <-  psc_implement(data[boot_idx,])
+      ests[b] <- curr_mod$coefficients[2]
+    }
+    else {
+      curr_mods <-  psc_implement_reg(data[boot_idx,])
+      B_A<- curr_mods[[2]]$coefficients['A'] ; B_X <- curr_mods[[2]]$coefficients['gs_ps_hat']
+      L_A <- curr_mods[[1]]$coefficients['A'] ; L_X <- curr_mods[[1]]$coefficients['ep_ps']
+
+      ests[b] <-  B_A - L_A*B_X/L_X
+    }
   }
   return(quantile(ests, probs=c(0.025,0.975)))
 }
 
-psc <- function(data,nboot=100) {
+psc <- function(data,nboot=100,iptw=1) {
   #' Outer function for the propensity score calibration method. Calls
   #' psc_implement to yield ATE estimate, and psc_bootstrap to obtain con
   #'
+  #' INPUTS
+  #'
   
   # Get weights
-  ATE_mod <- psc_implement(data)
+  if (iptw==1) {ATE_mod <- psc_implement(data)}
+  else {psc_mods <- psc_implement_reg(data)}
   
   # Estimate ATE
-  ATE <- ATE_mod$coefficients[2]
+  if (iptw==1) {
+    ATE <- ATE_mod$coefficients['A']
+  }
+  else {
+    B_A<- psc_mods[[2]]$coefficients['A']
+    B_X <- psc_mods[[2]]$coefficients['gs_ps_hat']
+    L_A <- psc_mods[[1]]$coefficients['A']
+    L_X <- psc_mods[[1]]$coefficients['ep_ps']
+    ATE <- B_A - L_A*B_X/L_X
+  }
   
   # Bootstrap to obtain confidence interval
-  if (nboot>0) {
-    CI_est <- psc_bootstrap(data,nboot)
-  }
+  
+  CI_est <- psc_bootstrap(data,nboot,iptw)
+
   
   results <- list(ATE=ATE,
                   CI =CI_est)

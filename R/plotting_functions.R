@@ -8,6 +8,7 @@ set_plot_theme <- function() {
   ggplot2::theme_set(
     ggplot2::theme_minimal() +
       ggplot2::theme(
+        plot.caption = ggplot2::element_text(hjust = 0),
         panel.grid.minor = ggplot2::element_blank(),
         plot.title = ggplot2::element_text(
           face = "bold"
@@ -25,13 +26,31 @@ set_plot_theme <- function() {
   )
 }
 
+label_handler <- function(var) {
+  # x vars
+  if (var=='u') return('Error variance')
+  if (var=='a') return('True ATE')
+  if (var=='n') return('Sample size')
+  if (var=='b') return('Binary outcome')
+  if (var=='rho') return('Corr(X,Z)')
+  if (var=='psi') return('Corr(X,V)')
+  if (var=='ax') return('ax')
+  
+  # y vars
+  if (var=='bias') return('Percent bias')
+  if (var=='mse') return('MSE')
+  if (var=='ci_cov') return('95% CI coverage rate')
+}
+
+title_handler <- function(g) {
+  return(1)
+}
+
 line_plot <- function(op_chars,xvar,yvar,
                       xlab,
                       ylab,
-                      plt_title,
-                      fixed_vars=c('u','a','n','b'),
-                      fixed_defaults=c(0.3,1,5000,0),
-                      var_labs=c('ME variance:', 'True ATE:', 'n:', 'Binary outcome:'),
+                      fixed_vars=c('u','a','n','b','rho','psi','ax'),
+                      fixed_defaults=NULL, # c(0.3,1,500,0,0.5,0.05,0.25),
                       drop_methods=NULL,
                       extra_options=NULL,
                       save=FALSE) {
@@ -66,21 +85,30 @@ line_plot <- function(op_chars,xvar,yvar,
     op_chars <- op_chars %>% filter(method!=m)
   }
   
+  # specify defaults to be first row of op_chars if defaults are not provided
+  if (is.null(fixed_defaults)) { 
+    tempdf <- op_chars %>% select('u','a','n','b','rho','psi','ax') %>%
+      unique() 
+    fixed_defaults <- tempdf[1,]
+  }
+  
   # Prune out the var that's being varied
   drop_idx <- (fixed_vars %in% xvar)   
   fixed_vars <- fixed_vars[! drop_idx] ; fixed_defaults <- fixed_defaults[! drop_idx]
-  var_labs <- var_labs[! drop_idx]
+  # var_labs filter step was here but changing that
   
+  var_labs <- rep(NA,length(fixed_vars)) 
+  for (v in 1:length(fixed_vars)) {
+    var_labs[v] <- label_handler(fixed_vars[v])
+  }
   
   # Fix values at defaults via filtering
-  
-  for (i in 1:length(fixed_vars)) {
+  for (i in 1:length(fixed_vars)) { # loop over the variables being kept fixed
   
     # Assert that the default values are actually used  in the simulation.
     # If not, throw an error message so the user can fix it
     # <...> !( fixed_defaults[i] %in% op_chars[fixed_vars[i]] )
-    if ( !(  any(fixed_defaults[i] == op_chars[fixed_vars[i]])   )  ) {
-
+    if ( !(  any(as.double(fixed_defaults[i]) == op_chars[fixed_vars[i]])   )  ) {
       stop(paste('Error: fixed val selected for',fixed_vars[i],'is not in operating characteristics dataframe. select a default that is in the dataframe'  ))
     }
     # Filter to only keep rows with default value of current var
@@ -97,17 +125,21 @@ line_plot <- function(op_chars,xvar,yvar,
     }
   }
   
+  # Make the title
+  plt_title <- paste(label_handler(yvar),'of ME correction methods')
+  
   # Make the plot
   op_chars %>% ggplot(aes(x=eval(as.name(xvar)),
                           y=eval(as.name(yvar)),
                           color=method)) + 
-               geom_line() + 
-               labs(x=xlab,
-                    y=ylab,
+               geom_line(size=0.75) + geom_point(size=2) +
+               labs(x=label_handler(xvar),
+                    y=label_handler(yvar),
                     title=plt_title,
-                    subtitle=subt)
+                    caption=subt,
+                    subtitle=paste('Varying',label_handler(xvar)),
+                    color='Method')
             
 }
 
-line_plot(op_chars,'u','bias',xlab='Error variance',ylab='Bias',plt_title = 'MSE of ME correction methods, varying error variance',
-          fixed_defaults = c(0.3,1,5000,0))
+line_plot(op_chars,'u','bias')

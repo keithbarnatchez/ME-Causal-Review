@@ -56,7 +56,7 @@ calc_stats <- function(data,methods,a,s) {
                                      method='simex_ind',iteration=s))
   }
   
-  # PSC
+  # PSC using IPTW
   if ('psc' %in% methods) {
     # Get ATE estimate
     ATE <- psc(data) 
@@ -65,6 +65,15 @@ calc_stats <- function(data,methods,a,s) {
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
                                      pow=pow,method='psc',iteration=s))
+  }
+  
+  if ('psc_reg' %in% methods) {
+    ATE <- psc(data,iptw=0) 
+    bias <- ATE[[1]]-a ; CI <- ATE[[2]]
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
+                                     pow=pow,method='psc_reg',iteration=s))  
   }
   
   # IV 
@@ -94,7 +103,8 @@ calc_stats <- function(data,methods,a,s) {
 
 
 get_stats_table <- function(methods,
-                            u,a,n,b,
+                            u,a,n,
+                            rho,psi,ax,b,
                             nsim) {
   #' For a given iteration, calculates the following stats of interest:
   #' - bias, MSE, CI coverage
@@ -121,17 +131,19 @@ get_stats_table <- function(methods,
   #'     
   
   # set up dataframe for calculating operating characteristics by group
-  sim_stats_list <- lapply(1:nsim, function(s, n, u, a, b, ...) {
+  sim_stats_list <- lapply(1:nsim, function(s, n, u, a, b, rho, psi, ax, ...) {
     
+    # Keep track of progress
     print(paste('On iteration',s,'of',nsim))
     
     # simulate data for current iteration
-    data <- generate_data(n,sig_u=u,ba=a,binary=b)
+    data <- generate_data(n,sig_u=u,ba=a,binary=b,
+                          rho=rho, psi=psi, ax=ax)
 
     # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
     return(calc_stats(data,methods,a,s))
     
-  }, n = n, u = u, a = a, b = b) # for s in 1:nsim
+  }, n = n, u = u, a = a, b = b, rho=rho, psi=psi, ax=ax) # for s in 1:nsim
   
   sim_stats <- do.call(rbind, sim_stats_list)
 
@@ -143,15 +155,21 @@ get_stats_table <- function(methods,
               ci_cov = 100*mean(ci_cov),
               power=100*mean(pow))
   
+  # make note of the grid point
   final_stats$u=u ; final_stats$a=a ; final_stats$n=n ; final_stats$b=b
+  final_stats$rho = rho ; final_stats$psi = psi ; final_stats$ax=ax
+  
   return(final_stats)
 } # calc_stats
 
 get_results <- function(methods,
-                        sig_u_grid,
-                        ba_grid,
-                        n_grid,
-                        bin_grid,
+                        sig_u_grid, # me variance
+                        ba_grid,    # tmt effect
+                        n_grid,     # n
+                        rho_grid,   # corr bw x and z
+                        psi_grid,   # corr bw x and instrument v
+                        ax_grid,
+                        bin_grid,   # whether outcome is binary or not
                         nsim=100) {
   
   #' Function for computing results of chosen ME-correction approaches, with
@@ -173,7 +191,9 @@ get_results <- function(methods,
   #'   method and specific values of sig_u, ba, n, etc)
   
   # Initialize dataframe for each stat of interest
-  scen_df <- expand.grid(sig_u = sig_u_grid, ba = ba_grid, n = n_grid, bin = bin_grid,
+  scen_df <- expand.grid(sig_u = sig_u_grid, ba = ba_grid, n = n_grid,
+                         rho=rho_grid, psi = psi_grid, ax=ax_grid,
+                         bin = bin_grid,
                          KEEP.OUT.ATTRS = TRUE, stringsAsFactors = FALSE)
   
   scen_list <- split(scen_df, seq(nrow(scen_df)))
@@ -183,11 +203,15 @@ get_results <- function(methods,
     u <- scen$sig_u # me variance
     a <- scen$ba # effect size
     n <- scen$n # sample size
+    rho <- scen$rho
+    psi <- scen$psi
+    ax <- scen$ax
     b <- scen$bin # binary outcome indicator
     
+    
     # Get operating characteristics for current grid point
-    op_tmp <- get_stats_table(methods,u,a,n,b,nsim)
-   
+    op_tmp <- get_stats_table(methods,u,a,n,rho,psi,ax,b,nsim)
+    
     return(op_tmp)
     
   }, methods = methods, nsim = nsim)
@@ -196,8 +220,6 @@ get_results <- function(methods,
     
   return(op_chars)
 } # get_results 
-
-
 
 bias_plot <- function(results) {
   
