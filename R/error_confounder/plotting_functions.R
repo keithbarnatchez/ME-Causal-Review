@@ -47,8 +47,6 @@ title_handler <- function(g) {
 }
 
 line_plot <- function(op_chars,xvar,yvar,
-                      xlab,
-                      ylab,
                       fixed_vars=c('u','a','n','b','rho','psi','ax'),
                       fixed_defaults=NULL, # c(0.3,1,500,0,0.5,0.05,0.25),
                       drop_methods=NULL,
@@ -112,22 +110,22 @@ line_plot <- function(op_chars,xvar,yvar,
       stop(paste('Error: fixed val selected for',fixed_vars[i],'is not in operating characteristics dataframe. select a default that is in the dataframe'  ))
     }
     # Filter to only keep rows with default value of current var
-    op_chars <- op_chars %>% filter( eval(as.name(fixed_vars[i])) == fixed_defaults[i] )
+    op_chars <- op_chars %>% filter( eval(as.name(fixed_vars[i])) == as.double(fixed_defaults[i]) )
     
     # Construct the figure subtitle
-    comma<-','
+    comma<-', '
     if (i==length(fixed_vars)) {comma<-''}
     if (i==1) {
-      subt <- paste(var_labs[i], fixed_defaults[i],comma)
+      subt <- paste(var_labs[i],': ', fixed_defaults[i],comma,sep='')
     }
     else{
-      subt <- paste(subt,var_labs[i], fixed_defaults[i],comma)
+      subt <- paste(subt,var_labs[i],': ', fixed_defaults[i],comma,sep='')
     }
   }
   
   # Make the title
   plt_title <- paste(label_handler(yvar),'of ME correction methods')
-  
+
   # Make the plot
   op_chars %>% ggplot(aes(x=eval(as.name(xvar)),
                           y=eval(as.name(yvar)),
@@ -139,7 +137,15 @@ line_plot <- function(op_chars,xvar,yvar,
                     caption=subt,
                     subtitle=paste('Varying',label_handler(xvar)),
                     color='Method')
-            
+  
+  # Want to save to current figure 
+  # first make the filename (format xvar_yvar_)
+  nm_str <- paste(xvar,'_',yvar,sep='')
+  for (i in 1:length(fixed_vars)) {
+    nm_str <- paste(nm_str,'_',fixed_vars[i],fixed_defaults[i],sep='')
+  }
+  nm_str <- paste(   gsub('.','',nm_str,fixed=T),'.pdf',sep=''    )
+  fullpath <- paste('../../output/figures/',nm_str,sep='')
+  ggsave(fullpath,height = 6,width = 9,units = 'in')
 }
 
-line_plot(op_chars,'u','bias')

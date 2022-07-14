@@ -53,7 +53,7 @@ calc_stats <- function(data,methods,a,s) {
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],
                                      ci_cov=ci_cov,pow=pow,
-                                     method='simex_ind',iteration=s))
+                                     method='SIMEX',iteration=s))
   }
   
   # PSC using IPTW
@@ -64,7 +64,7 @@ calc_stats <- function(data,methods,a,s) {
     ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
-                                     pow=pow,method='psc',iteration=s))
+                                     pow=pow,method='PSC-IPTW',iteration=s))
   }
   
   if ('psc_reg' %in% methods) {
@@ -73,7 +73,7 @@ calc_stats <- function(data,methods,a,s) {
     ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
-                                     pow=pow,method='psc_reg',iteration=s))  
+                                     pow=pow,method='PSC',iteration=s))  
   }
   
   # IV 
@@ -84,7 +84,7 @@ calc_stats <- function(data,methods,a,s) {
     ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
-                                     pow=pow,method='iv',iteration=s))
+                                     pow=pow,method='IV',iteration=s))
   }
   
   # MIME 
@@ -94,7 +94,7 @@ calc_stats <- function(data,methods,a,s) {
     ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],ci_cov=ci_cov,
-                                     pow=pow,method='mime',iteration=s))
+                                     pow=pow,method='MIME',iteration=s))
   }
   
   return(stats)
@@ -149,11 +149,11 @@ get_stats_table <- function(methods,
 
   # Compute avg operating characteristics from stats of interest 
   final_stats <- sim_stats %>% group_by(method) %>%
-    summarize(bias = 100*mean(bias)/a,
-              mse = mean(bias^2),
-              ATE = mean(ATE),
-              ci_cov = 100*mean(ci_cov),
-              power=100*mean(pow))
+    summarize(bias = 100*mean(bias/a,na.rm=T),
+              mse = mean(bias^2,na.rm=T),
+              ATE = mean(ATE,na.rm=T),
+              ci_cov = 100*mean(ci_cov,na.rm=T),
+              power=100*mean(pow,na.rm=T))
   
   # make note of the grid point
   final_stats$u=u ; final_stats$a=a ; final_stats$n=n ; final_stats$b=b
@@ -170,7 +170,8 @@ get_results <- function(methods,
                         psi_grid,   # corr bw x and instrument v
                         ax_grid,
                         bin_grid,   # whether outcome is binary or not
-                        nsim=100) {
+                        nsim=100,
+                        save_intermediate=T) {
   
   #' Function for computing results of chosen ME-correction approaches, with
   #' varying data parameters
@@ -183,6 +184,9 @@ get_results <- function(methods,
   #'  - sig_u_grid: Vector of values for measurement error variance
   #'  - bin_grid: Vector of values specifying whether to use binary outcome. At 
   #'              most length 2 (either 0, 1 or (0,1) )
+  #'  - nsim: number of simulations per grid point
+  #'  - save_intermediate: 0/1, if 1, will save a copy of op_chars every time
+  #'                       a new row is updated
   #'  
   #' OUTPUTS:
   #' - A dataframe containing calculated operating characteristics for 
@@ -215,8 +219,11 @@ get_results <- function(methods,
     return(op_tmp)
     
   }, methods = methods, nsim = nsim)
-    
+  
+  # Save the op_chars table after ach grid point is done so we don't need to
+  # wait for the entire run to be done (can plot grid points as they come in)  
   op_chars <- do.call(rbind, op_list)
+  
     
   return(op_chars)
 } # get_results 
