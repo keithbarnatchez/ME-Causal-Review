@@ -1,29 +1,21 @@
-# wrapper function to fit an ERF with measurement error using LOESS regression on a nonparametric models
-erf <- function(a, y, x, offset = NULL, family = gaussian(),
+# wrapper function to fit a nonparametric ERF with measurement error using kernel-weighted regression
+erf <- function(a, y, x, family = gaussian(),
                 a.vals = seq(min(a), max(a), length.out = 100),
-                bw = NULL, bw.seq = seq(0.1, 2, by = 0.1), folds = 5) {	
-  
-  if(is.null(offset))
-    offset <- rep(0, times = length(y))
+                bw = NULL, bw.seq = seq(0.1, 2, by = 0.1), folds = 5,
+                sl.lib = c("SL.mean", "SL.glm")) {	
   
   n <- length(a)
-  
-  if (family$family == "poisson") {
-    weights <- exp(offset)
-    ybar <- exp(log(y) - offset)
-  } else if (family$family == "gaussian") {
-    weights <- rep(1, n)
-    ybar <- y - offset
-  }
+  weights <- rep(1, times = n) # placeholder until we can incorporate this
     
-  wrap <- glm_est(y = ybar, a = a, x = x, a.vals = a.vals, weights = weights, family = family)
+  wrap <- sl_est(y = y, a = a, x = x, a.vals = a.vals, 
+                 family = family, sl.lib = sl.lib)
   
   psi <- wrap$psi
   int.mat <- wrap$int.mat
   
   # select bw if null
   if (is.null(bw))
-    bw <- cv_bw(a = a, psi = psi, folds = folds, bw.seq = bw.seq)
+    bw <- cv_bw(a = a, psi = psi, weights = weights, folds = folds, bw.seq = bw.seq)
   
   # asymptotics
   out <- sapply(a.vals, kern_est, psi = psi, a = a, weights = weights,
@@ -53,8 +45,8 @@ erf <- function(a, y, x, offset = NULL, family = gaussian(),
 }
 
 
-# estimate glm outcome model (Keith - try different ML methods)
-glm_est <- function(a, y, x, a.vals, weights = NULL, family = gaussian(), ...) {
+# estimate glm outcome model (Keith - adapt code to fit a Poisson outcome as an excercise)
+sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "SL.glm"), ...) {
   
   if (is.null(weights))
     weights <- rep(1, nrow(x))
@@ -62,33 +54,33 @@ glm_est <- function(a, y, x, a.vals, weights = NULL, family = gaussian(), ...) {
   # set up evaluation points & matrices for predictions
   n <- nrow(x)
   x <- data.frame(x)
-  xa <- cbind(as.matrix(x), a - 10, cos(pi*(a - 6)/4), (a - 10)*x[,1])
+  xa <- data.frame(x, a)
   
   # outcome model
-  mumod <- glm(y ~ xa, weights = weights, family = family)
-  muhat <- mumod$fitted.values
+  mumod <- SuperLearner(Y = y, X = xa, family = family, SL.library = sl.lib)
+  muhat <- mumod$SL.predict
   
   muhat.mat <- sapply(a.vals, function(a.tmp, ...) {
     
-    xa.tmp <- cbind(1, as.matrix(x), a.tmp - 10, cos(pi*(a.tmp - 6)/4), (a.tmp - 10)*x[,1])
-    return(c(exp(xa.tmp %*% mumod$coefficients)))
+    xa.tmp <- data.frame(x, a = a.tmp)
+    predict(mumod, newdata = xa.tmp)$pred
     
   })
   
-  mhat.vals <- apply(muhat.mat, 2, weighted.mean, w = weights)
+  mhat.vals <- colMeans(muhat.mat)
   mhat <- predict(smooth.spline(x = a.vals, y = mhat.vals), x = a)$y
 
   # GPS model
-  pimod <- lm(a ~ ., data = data.frame(x))
-  pimod.vals <- pimod$fitted.values
-  pimod.sd <- sigma(pimod)
-  a.std <- (a - pimod.vals)/pimod.sd
+  pimod <- SuperLearner(Y = a, X = x, SL.library = sl.lib)
+  pimod.vals <- pimod$SL.predict
+  pimod.sd <- sd(a - pimod.vals)
+  a.std <- c(a - pimod.vals)/pimod.sd
   dens <- density(a.std)
   pihat <- approx(x = dens$x, y = dens$y, xout = a.std)$y / pimod.sd # don't forget le Jacobian!
   
   phat.vals <- sapply(a.vals, function(a.tmp, ...){
     
-    a.tmp <- (a.tmp - pimod.vals)/pimod.sd
+    a.tmp <- c(a.tmp - pimod.vals)/pimod.sd
     mean(approx(x = dens$x, y = dens$y, xout = a.std)$y / pimod.sd, na.rm = TRUE)
     
   })
@@ -110,7 +102,7 @@ glm_est <- function(a, y, x, a.vals, weights = NULL, family = gaussian(), ...) {
   
 }
 
-# LOESS function
+# Kernel weighted least squares
 kern_est <- function(a.new, a, psi, bw, weights = NULL, se.fit = FALSE, int.mat = NULL, a.vals = NULL) {
   
   n <- length(a)
@@ -154,16 +146,13 @@ kern_est <- function(a.new, a, psi, bw, weights = NULL, se.fit = FALSE, int.mat 
 }
 
 # k-fold cross validation to select bw
-cv_bw <- function(a, psi, weights = NULL, folds = 5, bw.seq = seq(0.05, 1, by = 0.05)) {
+cv_bw <- function(a, psi, weights = NULL, folds = 5, bw.seq = seq(0.1, 2, by = 0.1)) {
   
   if(is.null(weights))
     weights <- rep(1, times = length(a))
   
   n <- length(a)
-  fdx <- sample(x = folds, size = min(n, 1000), replace = TRUE)
-  idx <- sample(x = n, size = min(n, 1000), replace = FALSE) # for big data
-  a.sub <- a[idx]
-  psi.sub <- psi[idx]
+  idx <- sample(x = folds, size = n, replace = TRUE)
   
   cv.mat <- sapply(bw.seq, function(h, ...) {
     
@@ -171,9 +160,9 @@ cv_bw <- function(a, psi, weights = NULL, folds = 5, bw.seq = seq(0.05, 1, by = 
     
     for(k in 1:folds) {
       
-      preds <- sapply(a.sub[fdx == k], kern_est, psi = psi.sub[fdx != k], a = a.sub[fdx != k], 
-                      weights = weights[fdx != k], bw = h, se.fit = FALSE)
-      cv.vec[k] <- mean((psi.sub[fdx == k] - preds)^2, na.rm = TRUE)
+      preds <- sapply(a[idx == k], kern_est, psi = psi.sub[idx != k], a = a.sub[idx != k], 
+                      weights = weights[idx != k], bw = h, se.fit = FALSE)
+      cv.vec[k] <- mean((psi.sub[idx == k] - preds)^2, na.rm = TRUE)
       
     }
     

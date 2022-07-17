@@ -1,21 +1,21 @@
 ## Inputs
 
-# n = number of clusters
-# mult = number of grids equals n*mult
-# sigma = sd of the true exposure
-# tau = exposure error
+# n = sample size
+# omega = outcome sd
+# sigma = true exposure sd
+# tau = exposure error sd
 # type = "replicate" or "validate"
-# mult = if type == "replicate" identifies  average # of replications
+# mult = if type == "replicate", identifies  average # of replicates
 
 ## Output
 
-# a = true exposure
-# z = error prone exposure
-# s = replicate error prone exposure
-# y = outcome
+# a = true exposures
+# z = single error prone exposures
+# s = replicate error prone exposures
+# y = outcomes
+# x = confounders
 # id = id for a and y
 # s.id = replicate id for s, same levels as id
-# x = confounders
 
 gen_data <- function(n = c(400, 800), omega = 2, sigma = sqrt(2), tau = 1, type = c("replicate", "validate"), mult = c(5, 10)) {
   
@@ -57,7 +57,7 @@ gen_data <- function(n = c(400, 800), omega = 2, sigma = sqrt(2), tau = 1, type 
   # create simulation dataset
   
   if (type == "replicate")
-    sim <- list(a = a, s = s, y = y, x = x, id = id, s.id = s.id)
+    sim <- list(a = a, s = s, y = y, x = x, x.id = id, s.id = s.id)
   else
     sim <- list(a = a, z = z, y = y, x = x, id = id)
     
