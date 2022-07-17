@@ -12,9 +12,9 @@ library(parallel)
 library(abind)
 
 # Code for generating and fitting data
-source("~/Github/ME-Causal-Review/rc/gen_data.R")
-source("~/Github/ME-Causal-Review/rc/erf.R")
-source("~/Github/ME-Causal-Review/rc/blp.R")
+source("~/Github/ME-Causal-Review/R/error_exposure/gen_data.R")
+source("~/Github/ME-Causal-Review/R/error_exposure/erf.R")
+source("~/Github/ME-Causal-Review/R/error_exposure/rc.R")
 
 # simulation arguments
 n.sim <- 100
