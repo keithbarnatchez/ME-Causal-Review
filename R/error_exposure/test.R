@@ -91,7 +91,7 @@ out <- mclapply(1:n.sim, function(i, ...) {
   
   return(list(est = est, se = se))
   
-}, mc.cores = 25, mc.preschedule = TRUE)
+}, mc.cores = 8, mc.preschedule = TRUE)
 
 stop <- Sys.time()
 stop - start

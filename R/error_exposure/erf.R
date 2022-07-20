@@ -80,8 +80,8 @@ sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "
   
   phat.vals <- sapply(a.vals, function(a.tmp, ...){
     
-    a.tmp <- c(a.tmp - pimod.vals)/pimod.sd
-    mean(approx(x = dens$x, y = dens$y, xout = a.std)$y / pimod.sd, na.rm = TRUE)
+    a.std.tmp <- c(a.tmp - pimod.vals)/pimod.sd
+    mean(approx(x = dens$x, y = dens$y, xout = a.std.tmp)$y / pimod.sd, na.rm = TRUE)
     
   })
   
