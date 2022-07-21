@@ -29,7 +29,7 @@ bw <- 0.5 # bandwidth
 # model arguments
 a.vals <- seq(6, 14, by = 0.02)
 sl.lib <- c("SL.mean", "SL.glm", "SL.glm.interaction", 
-            "SL.glmnet", "SL.ranger", "SL.earth") # SuperLearner Libraries
+            "SL.glmnet", "SL.gam", "SL.ranger") # SuperLearner Libraries
 
 start <- Sys.time()
 
@@ -91,7 +91,7 @@ out <- mclapply(1:n.sim, function(i, ...) {
   
   return(list(est = est, se = se))
   
-}, mc.cores = 8, mc.preschedule = TRUE)
+}, mc.cores = 25, mc.preschedule = TRUE)
 
 stop <- Sys.time()
 stop - start

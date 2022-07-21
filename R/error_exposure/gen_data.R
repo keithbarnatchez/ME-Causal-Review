@@ -45,14 +45,14 @@ gen_data <- function(n = c(400, 800), omega = 2, sigma = sqrt(2), tau = 1, type 
     
   } else {
     
-    z <- rnorm(n, a*(-0.25*x1 + 0.75*x2 + -0.75*x3 + 0.25*x4),  tau)
+    z <- rnorm(n, a*(1 - 0.25*x1 + 0.75*x2 + -0.75*x3 + 0.25*x4), tau)
     
   }
 
-  mu_out <- 2 - 0.5*x[,1] - 0.25*x[,2] + 0.25*x[,3] + 0.5*x[,4] +
+  mu_out <- 2 - 0.75*x[,1] - 0.25*x[,2] + 0.25*x[,3] + 0.75*x[,4] +
     0.25*(a - 10) - 0.75*cos(pi*(a - 6)/4) - 0.25*(a - 10)*x[,1]
   
-  y <- rnorm(n, mu_out) # Keith - try simulating and fitting a poisson model
+  y <- rnorm(n, mu_out, omega) # Keith - try simulating and fitting a poisson model
   
   # create simulation dataset
   
@@ -74,7 +74,7 @@ predict_example <- function(a.vals, x) {
   for(i in 1:length(a.vals)) {
     
     a.vec <- rep(a.vals[i],nrow(x))
-    mu_out <- 2 + x %*% c(-0.5,-0.25,0.25,0.5) + 0.25*(a.vec - 10) - 
+    mu_out <- 2 + x %*% c(-0.75,-0.25,0.25,0.75) + 0.25*(a.vec - 10) - 
       0.75*cos(pi*(a.vec - 6)/4) - 0.25*(a.vec - 10)*x[,1]
     out[i] <- mean(mu_out)
     
