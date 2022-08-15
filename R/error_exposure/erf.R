@@ -116,7 +116,7 @@ kern_est <- function(a.new, a, psi, bw, weights = NULL, se.fit = FALSE, int.mat 
   g.std <- cbind(1, a.std)
   
   b <- lm(psi ~ -1 + g.std, weights = k.std*weights)$coefficients
-  mu <- b[1]
+  mu <- b[1] + b[3]
   
   if (se.fit & !is.null(int.mat)) {
     
@@ -176,4 +176,3 @@ cv_bw <- function(a, psi, weights = NULL, folds = 5, bw.seq = seq(0.1, 2, by = 0
   return(bw)
   
 }
-

@@ -200,8 +200,8 @@ multi_blp <- function(s, s.id, x = NULL, x.id = NULL) {
 
 ## Validation Data
 
-# a = gold standard ("true" measurement); length(a) == length(z)if missing include as NA
-# z = mismeasured covariate
+# a = gold standard ("true" exposure); length(a) == length(z)if missing include as NA
+# z = mismeasured exposure
 # x = covariate data
 
 pred <- function(a, z, x, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction", "SL.glmnet", "SL.ranger", "SL.earth")){

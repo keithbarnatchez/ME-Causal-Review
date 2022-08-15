@@ -23,7 +23,7 @@ sigma <- sqrt(2) # exposure sd
 tau <- 1 # error sd
 mult <- 5 # for replication - the average number of replicate measurements
 prob <- 0.1 # for validation - proportion of data where A is observed
-n <- 800 # sample size
+n <- 800 # sample size divisible by 8
 bw <- 0.5 # bandwidth
 
 # model arguments
