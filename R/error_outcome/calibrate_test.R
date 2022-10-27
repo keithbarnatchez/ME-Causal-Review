@@ -42,31 +42,31 @@ out <- mclapply(1:n.sim, function(i, ...) {
   y_me <- y_true + rnorm(n, eta_out, tau)
   
   rho <- plogis(-1.5 + 0.5*x[,1] + 0.5*x[,2] - 0.5*x[,3] - 0.5*x[,4])
-  S <- rbinom(n, 1, rho)
+  val <- rbinom(n, 1, rho)
   
   true_erc <- sapply(a.vals, function(a.tmp, ...) {
     
-    mean(2 - 0.75*x[S == 0,1] - 0.25*x[S == 0,2] + 0.25*x[S == 0,3] + 0.75*x[S == 0,4] +
-      0.25*(a.tmp - 10) - 0.75*cos(pi*(a.tmp - 6)/4) - 0.25*(a.tmp - 10)*x[S == 0,1])
+    mean(2 - 0.75*x[val == 0,1] - 0.25*x[val == 0,2] + 0.25*x[val == 0,3] + 0.75*x[val == 0,4] +
+      0.25*(a.tmp - 10) - 0.75*cos(pi*(a.tmp - 6)/4) - 0.25*(a.tmp - 10)*x[val == 0,1])
     
   })
 
-  A0 <- a[S == 0]
-  A1 <- a[S == 1]
-  X0 <- x[S == 0,]
-  X1 <- x[S == 1,]
-  Y0 <- y_me[S == 0]
-  Y1_me <- y_me[S == 1]
-  Y1_true <- y_true[S == 1]
+  A0 <- a[val == 0]
+  A1 <- a[val == 1]
+  X0 <- x[val == 0,]
+  X1 <- x[val == 1,]
+  Y0 <- y_me[val == 0]
+  Y1_me <- y_me[val == 1]
+  Y1_true <- y_true[val == 1]
   
   adjust <- out_bias(A0 = A0, A1 = A1, X0 = X0, X1 = X1, Y0 = Y0, Y1_me = Y1_me, 
-                    Y1_true = Y1_true, a.vals = a.vals, bw = 0.7)
+                     Y1_true = Y1_true, a.vals = a.vals, bw = 0.7)
   naive <- out_naive(A0, X0, Y0, a.vals = a.vals, bw = 0.7)
   
   return(list(est = t(data.frame(true_erc = true_erc, naive_est = naive$estimate, adjust_est = adjust$estimate)),
               se = t(data.frame(adjust_se = adjust$se, naive_se = naive$se))))
   
-}, mc.cores = 25, mc.preschedule = TRUE)
+}, mc.cores = 8, mc.preschedule = TRUE)
 
 stop <- Sys.time()
 stop - start
