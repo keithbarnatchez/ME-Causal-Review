@@ -24,10 +24,11 @@ tau <- 1 # error sd
 mult <- 5 # for replication - the average number of replicate measurements
 prob <- 0.1 # for validation - proportion of data where A is observed
 n <- 800 # sample size divisible by 8
-bw <- 0.5 # bandwidth
+bw <- 1 # degrees of freedom
+family <- gaussian()
 
 # model arguments
-a.vals <- seq(6, 14, by = 0.02)
+a.vals <- seq(6, 14, by = 0.04)
 sl.lib <- c("SL.mean", "SL.glm", "SL.glm.interaction", 
             "SL.glmnet", "SL.gam", "SL.ranger") # SuperLearner Libraries
 

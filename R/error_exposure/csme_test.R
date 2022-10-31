@@ -1,6 +1,7 @@
 rm(list = ls())
 library(geex)
 library(rootSolve)
+library(parallel)
 source("~/Github/ME-Causal-Review/R/error_exposure/csme.R")
 
 # Set parameter values
@@ -56,9 +57,10 @@ out <- mclapply(1:n.sim, function(i, ...) {
     (coef(results)[p] + 1.96*se) > true_effect
   
  out = list(bias = bias, se = se, coverage = coverage)
+ return(out)
   
 }, mc.cores = 25, mc.preschedule = TRUE)
 
-bias_est <- mean(c(lapply(out, function(lst, ...) lst$bias)))
-cov_est <- mean(c(lapply(out, function(lst, ...) lst$coverage))
+bias_est <- mean(do.call(c, lapply(out, function(lst, ...) lst$bias)))
+cov_est <- mean(do.call(c, lapply(out, function(lst, ...) lst$coverage)))
 
