@@ -1,8 +1,9 @@
-# error_confounder/data_functions.R
+# exposure_data_functions.R
 #
-# This file contains functions for simulating data with measurement error in
-# the confounder, as described in the main paper
-
+#
+#
+#
+################################################################################
 
 # First define functions for quickly computing common functions
 logit <- function(x) {
@@ -13,8 +14,8 @@ expit <- function(x) {
   return( exp(x) / (1+exp(x)) )
 }
 
-meas_model <- function(X,sig_u) {
-  #' Generates error-prone measurements of exposure X, with variance sig_u
+meas_model <- function(A,sig_u) {
+  #' Generates error-prone measurements of exposure A, with variance sig_u
   #' Working with just classical measurement error for now, but there is option
   #' to alter code for different processes
   #' 
@@ -25,18 +26,20 @@ meas_model <- function(X,sig_u) {
   #' OUTPUTS: 
   #' - Error-prone exposurement measurement variable
   
-  return( X + rnorm( length(X),0,sig_u ) )
+  return( A + rnorm( length(A),0,sig_u ) )
 }
 
-tmt_model <- function(X,Z,
+tmt_model <- function(X,Z,V,
                       ax = .25,
                       az = .25,
-                      a0 = 0) {
+                      av=  .25,
+                      a0 = 0,
+                      response_type='linear') {
   #' Generates treatment model for T with error-prone exposure X and 
   #' properly-measured exposure Z
   
-  p_tmt <- expit(a0 + ax*X + az*Z)
-  A <- rbinom(length(X),size=1,prob=p_tmt) 
+  mu <- a0 + ax*X + az*Z + az*V
+  A <- rnorm(length(X),mean = mu,sd=1) 
   return(A)
 }
 
@@ -59,7 +62,7 @@ outcome_model <- function(A,X,Z,
   #'   dgp (governed by the user-supplied parameters)
   
   mu <- b0 + ba*A + bx*X + bz*Z 
-
+  
   if (binary==0) { # if continuous outcome
     return( rnorm(length(X), mean = mu, sd=sig_e))
   }
@@ -89,13 +92,13 @@ generate_covariates <- function(n, rho, psi) {
 }
 
 generate_data <- function(n,
-                       sig_e=1,
-                       sig_u=0.1,
-                       rho=0.5, psi=0.5,
-                       ax=0.5,az=0.5,a0=0,
-                       ba=1,bx=1,bz=1,b0=0,
-                       v_share=0.1,
-                       binary=0) {
+                          sig_e=1,
+                          sig_u=0.1,
+                          rho=0.5, psi=0.5,
+                          ax=0.5,az=0.5,a0=0,
+                          ba=1,bx=1,bz=1,b0=0,
+                          v_share=0.1,
+                          binary=0) {
   #' Generates dataset with outcome variable y, error-prone exposure X with 
   #' measurements W, binary treatment of interest T, and confounding variable Z.
   #' For now, I'm assuming homoskedasticity in the outcome and measurement error
@@ -119,18 +122,18 @@ generate_data <- function(n,
   X <- covariates[,1] ; Z <- covariates[,2] ; V <- covariates[,3]
   
   # Simulate treatment process
-  A <- tmt_model(X,Z,ax,az,a0)
+  A <- tmt_model(X,Z,V,ax,az,a0)
   
   # Simulate outcome 
   Y <- outcome_model(A,X,Z,ba,bx,bx,b0,sig_e,binary)
   
   # Simulate error-prone measurements
-  W <- meas_model(X, sig_u) 
+  W <- meas_model(A, sig_u) 
   
   # Get validation data index
   v_share <- 0.1 # share in validation data
   v_idx <- rbinom(n,size=1,prob=v_share)
-    
+  
   out_data <- data.frame(Y=Y,X=X,A=A,W=W,Z=Z,V=V,v_idx=v_idx)
   return(out_data)
 }

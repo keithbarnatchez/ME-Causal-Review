@@ -11,10 +11,14 @@ library(SuperLearner)
 library(parallel)
 library(abind)
 
+source("gen_data.R")
+source("erf.R")
+source("rc.R")
+
 # Code for generating and fitting data
-source("~/Github/ME-Causal-Review/R/error_exposure/gen_data.R")
-source("~/Github/ME-Causal-Review/R/error_exposure/erf.R")
-source("~/Github/ME-Causal-Review/R/error_exposure/rc.R")
+# source("~/Github/ME-Causal-Review/R/error_exposure/gen_data.R")
+# source("~/Github/ME-Causal-Review/R/error_exposure/erf.R")
+# source("~/Github/ME-Causal-Review/R/error_exposure/rc.R")
 
 # simulation arguments
 n.sim <- 100 # number of simulations

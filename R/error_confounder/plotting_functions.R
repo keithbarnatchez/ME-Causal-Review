@@ -55,7 +55,7 @@ line_plot <- function(op_chars,xvar,yvar,
   #' Function for generating plots of operating characteristics
   #'
   #' INPUTS:
-  #' - op_chars
+  #' - op_chars dataframe from get_results()
   #' - xvar (u,a,n,b): A string containing the x variable for the plot
   #' - yvar (bias,mse,ATE,ci_cov,power): A string for y variable
   #' - xlab: x axis title

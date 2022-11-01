@@ -5,7 +5,93 @@
 # methods: 1) propensity score calibration, 2) indirect SIMEX (Kyle et al. 2015),
 # 3) IV, 4) 
 #
+#
+#
+# ---------------------------------------------------------
+# utility functions to supplement other calculations
 
+expit <- function(x) {
+  return(exp(x)/(1+exp(x)))
+}
+
+simex_predictions <- function(simex_model) {
+  
+  # Get log odds
+  lodds <- model.matrix(simex_model$model)%*%simex_model$coefficients
+  
+  return(expit(lodds)) # return predicted probabilities
+}
+
+aipw <- function(data,pihat=NULL,methods = 'SL.glm') {
+  #' Main function for implementing AIPW estimator. Calls aipw_calc for the 
+  #' actual calculation after calculating all necessary objects
+  #' 
+  #' INPUTS: 
+  #' - data: A dataframe created by the generate_data() function
+  #' - methods: Character vector with libraries to feed into SuperLearner. By
+  #'            default, we just use regular glm (no non-parametric stuff)
+  #'
+  #' Outputs:
+  #' - Estimate of the ATE
+  
+  # Outcome model
+  y <- data$Y
+  X <- data %>% select(W,Z,A)
+  outcome_model <- SuperLearner(Y=y,X=X,SL.library = methods, family=gaussian)
+  
+  # Predict cond on A=0, A=1
+  rhs0 <- X %>% mutate(A=0) # scenario where all tmt vals are 0
+  rhs1 <- X %>% mutate(A=1) # scenario where all tmt vals are 1
+  yhat0 <- predict(outcome_model,newdata=rhs0,X=X,Y=y)$pred # E[Y|X,A=0]
+  yhat1 <- predict(outcome_model,newdata=rhs1,X=X,Y=y)$pred # E[Y|X,A=1]
+  
+  if (is.null(pihat)) { # if aren't pre-supplying propensity scores
+    # Get predicted propensity scores
+    Xtilde <- X %>% select(-A)
+    tmt_model <- SuperLearner(Y=X$A, X=Xtilde, SL.library=methods,family=binomial())
+    pihat <- predict(tmt_model, type='response')$pred
+  }
+  
+  # Calculate the AIPW estimate and return the result
+  return(  aipw_calc(y,data$A,pihat,yhat0,yhat1)  )
+}
+
+aipw_calc <- function(y,a,pihat,yhat0,yhat1) {
+  #' Implements the augmented inv probability estimator (see eq3 of Glynn &
+  #' Quinn, Political Analysis 2010)
+  #' INPUTS: 
+  #' - y: outcome
+  #' - a: exposure
+  #' - pihat: predicted propensity scores
+  #' - yhat0: E(Y|A=0,Z)
+  #' - yhat1: E(Y|A=1,Z)
+  #'
+  #' OUTPUTS:
+  #' - Estimate of ATE
+  
+  # Compute relevant terms for estimator
+  term1 <- a*y/pihat - (1-a)*y/(1-pihat)
+  term2 <- (a-pihat)/(pihat*(1-pihat))
+  term3 <- (1-pihat)*yhat1 + pihat*yhat0
+  
+  # ATE estimator
+  ATE_hat <- mean(term1 - term2*term3)
+  
+  # Sandwich estimator
+  Vhat <- (term1 - term2*term3) - ATE_hat
+  Vhat <- sum(Vhat^2)/(length(Vhat)^2)
+  
+  # Rely on asymptotics for CI construction
+  lower_ci <- ATE_hat - sqrt(Vhat)*qnorm(0.975)
+  upper_ci <- ATE_hat + sqrt(Vhat)*qnorm(0.975)
+  
+  return(list(ATE=ATE_hat,
+              CI=c(lower_ci,upper_ci)) )
+  
+}
+
+
+# ---------------------------------------------------------
 # ---------------------------------------------------------
 #                PROPENSITY SCORE CALIBRATION
 # ---------------------------------------------------------
@@ -63,7 +149,7 @@ psc_implement <- function(data) {
   
   # thinking about returning altered df but for now returning ipw
   # mean(data$Y * data$A * data$iptw) - mean(data$Y * (1-data$A) * data$iptw) 
-  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
+  outcome_mod <- lm(Y ~ A, weights=data$iptw,data=data)
   return(ATE_mod)
 }
 
@@ -161,9 +247,13 @@ psc <- function(data,nboot=100,iptw=1) {
 simex_indirect_implement <- function(data) {
   #' Implements the indirect SIMEX adjustment described in Kyle et al. (2016)
   #' Called within the simex_indirect() function
+  #' 
+  #' Returns a model object for the ATE
   
-  # Estimate ME variance
-  sig_u_hat <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)])
+  # Estimate ME variance via the validation data (i.e. sd of X-W in val data)
+  # Note: should be fine to do it this way since we're assuming non-dif/classical
+  # but may need to explore extensions
+  sig_u_hat <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)]) 
   
   # Run SIMEX on PS coefficient
   ps_model <- glm(A ~ W + Z, data=data, family='binomial', x=TRUE)
@@ -172,13 +262,15 @@ simex_indirect_implement <- function(data) {
                        measurement.error = sig_u_hat)
   
   # Get weights
-  e_hat <- predict(simex_model,type='response')
+  # e_hat <- predict(simex_model,type='response')
+  e_hat <- simex_predictions(simex_model)
   w_hat <- ifelse(data$A==1,
                   1/e_hat,
                   1/(1-e_hat))
+  data$w_hat <- w_hat
   
   # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
+  ATE_mod <- lm(Y ~ A, weights=data$w_hat,data=data)
   
   return(ATE_mod)
 }
@@ -203,7 +295,7 @@ simex_bootstrap <- function(data, nboot=1e3) {
     return(quantile(ests, probs=c(0.025,0.975)))
 }
 
-simex_indirect <- function(data, nboot=1000) {
+simex_indirect <- function(data, nboot=0) {
   #' Implement the indirect SIMEX correction procedure described in Kyle et al.
   #' (2016)
   #'
@@ -219,10 +311,15 @@ simex_indirect <- function(data, nboot=1000) {
   # Get weights for IPTW
   ATE_mod <- simex_indirect_implement(data)
   ATE_est <- ATE_mod$coefficients[2]
+  print('ATE est:')
+  print(ATE_est)
   
   if (nboot>0) {
     CI_est <- simex_bootstrap(data,nboot)
   }
+  
+  return(list(ATE_mod$coefficients[2],
+              confint(ATE_mod)))
 }
 
 # --------------------------------------------------------
@@ -270,10 +367,10 @@ ate_ideal <- function(data) {
 
 ate_naive <- function(data) {
   #' Computes ATE when naively using W in place of X in estimating propensity
-  #' scores, but with otherwisr correctly-specified model
+  #' scores, but with otherwise correctly-specified model
   #' 
   #' Returns ATE estimates
-  ps_model <- glm(A ~ W + Z, data=data, family='binomial')
+  ps_model <- glm(A ~ W + Z, data=data, family='binomial') 
   e_hat <- predict(ps_model,type='response')
   w_hat <- ifelse(data$A==1,
                   1/e_hat,
@@ -342,10 +439,3 @@ mime <- function(data,m=20) {
   
 }
  
-# ------------------------------------------------------------
-#              Conditional score approach
-# ------------------------------------------------------------
-
-cond_score <- function(data) {
-  1
-}

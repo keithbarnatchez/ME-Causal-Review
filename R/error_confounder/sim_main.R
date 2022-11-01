@@ -13,14 +13,14 @@
 # Running this code will result in two outputs:
 # 1) a csv file containing the results of performing get_results() with the 
 #    user-specified parameter values/combinations, named
-#    "sim_resuls_<datestring>.csv", where datestring is generatef with 
+#    "sim_resuls_<datestring>.csv", where datestring is generated with 
 # 2) a text file containing the specified parameter values
 # ------------------------------------------------------------------------------
 library(mvtnorm) # for simulating data
 library(simex) # for the indirect SIMEX approach
-library(tidyverse)
+library(tidyverse) # data manipulation/plotting
 library(mice) # for multiple imputation
-library(ipw)
+library(ipw) # calculating ATEs
 library(AER) # for instrumental variables
 library(betareg) # for using beta regression in PSC 
 # ------------------------------------------------------------------------------
@@ -32,7 +32,7 @@ simdir <- '../../output/sim_results/' # directory
 fullpath <- paste(simdir,flnm,sep='') # construct path to final file name 
 # ------------------------------------------------------------------------------
 # Set up simulation parameters
-methods <- c('iv','psc_reg','mime') 
+methods <- c('simex_ind') 
 sig_u_grid <- c(0.1,0.5,0.9) # ME variances
 ba_grid <- c(1) # treatment effect
 n_grid <- c(5000) # sample size
@@ -54,7 +54,7 @@ op_chars <- get_results(methods,
                         rho_grid,
                         psi_grid,
                         ax_grid,
-                        bin_grid, nsim=250)
+                        bin_grid, nsim=50)
 
 # Output the results as a csv
 
