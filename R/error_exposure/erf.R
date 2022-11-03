@@ -1,11 +1,11 @@
 # wrapper function to fit a nonparametric ERF with measurement error using kernel-weighted regression
-erf <- function(a, y, x, family = gaussian(),
-                a.vals = seq(min(a), max(a), length.out = 100),
-                bw = 1, sl.lib = c("SL.mean", "SL.glm")) {	
+erf <- function(a, y, x, a0, a1, family = gaussian(),
+                sl.lib = c("SL.mean", "SL.glm")) {	
   
   n <- length(a)
   weights <- rep(1, times = n) # placeholder until we can incorporate this
-    
+  a.vals <- seq(min(a), max(a), length.out = 100)  # placeholder until we can incorporate this
+  
   wrap <- sl_est(y = y, a = a, x = x, a.vals = a.vals, 
                  family = family, sl.lib = sl.lib)
   
@@ -13,11 +13,11 @@ erf <- function(a, y, x, family = gaussian(),
   int.mat <- wrap$int.mat
   
   # asymptotics
-  out <- sapply(a.vals, kern, psi = psi, a = a, weights = weights, bw = bw, 
-                se.fit = TRUE, int.mat = int.mat, a.vals = a.vals)
+  out <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, weights = weights, 
+            se.fit = TRUE, a.vals = a.vals, int.mat = int.mat)
   
-  estimate <- out[1,]
-  variance <- out[2,]
+  estimate <- out[1]
+  variance <- out[2]
   
   # bootstrap
   # boot.idx <- cbind(1:n, replicate(200, sample(x = n, size = n, replace = TRUE)))
@@ -32,7 +32,6 @@ erf <- function(a, y, x, family = gaussian(),
   # estimate <- out[,1]
   # variance <- apply(out[,2:ncol(out)], 1, var)
   
-  names(estimate) <- names(variance) <- a.vals
   out <- list(estimate = estimate, variance = variance)	
   
   return(out)
@@ -98,45 +97,39 @@ sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "
 }
 
 # Kernel weighted least squares
-kern <- function(a.new, a, psi, bw = 1, weights = NULL,  se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
+contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
   
   n <- length(a)
   
   if (is.null(weights))
     weights <- rep(1, times = n)
   
-  # Gaussian Kernel
-  a.std <- (a - a.new) / bw
-  k.std <- dnorm(a.std) / bw
-  g.std <- cbind(1, a.std)
+  # Regression
+  g.std <- cbind(1, a)
   
-  b <- lm(psi ~ -1 + g.std, weights = weights*k.std)$coefficients
-  mu <- unname(b[1])
+  mod <- lm(psi ~ a, weights = weights)
+  mu <- (a1 - a0)*mod$coefficients[2]
   
   if (se.fit & !is.null(int.mat) & !is.null(a.vals)) {
     
-    if (!(a.new %in% a.vals))
-      stop("!(a.new %in% a.vals)")
-    
-    eta <- c(g.std %*% b)
+    eta <- mod$fitted.values
     
     # Gaussian Kernel Matrix
-    kern.mat <- matrix(rep(dnorm((a.vals - a.new) / bw) / bw, n), byrow = T, nrow = n)
-    g.vals <- matrix(rep(c(a.vals - a.new) / bw, n), byrow = T, nrow = n)
-    intfn1.mat <- kern.mat * int.mat
-    intfn2.mat <- g.vals * kern.mat * int.mat
+    g.vals <- matrix(rep(a.vals, n), byrow = T, nrow = n)
+    intfn1.mat <- int.mat
+    intfn2.mat <- g.vals * int.mat
     
     int1 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), byrow = T, nrow = n)*
                       (intfn1.mat[,-1] + intfn1.mat[,-length(a.vals)])/2)
     int2 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), byrow = T, nrow = n)*
                       (intfn2.mat[,-1] + intfn2.mat[,-length(a.vals)])/2)
     
-    U <- solve(crossprod(g.std, weights*k.std*g.std))
-    V <- cbind(weights*(k.std * (psi - eta) + int1),
-               weights*(a.std * k.std * (psi - eta) + int2))
-    Sig <- U %*% crossprod(V) %*% U
+    U <- solve(crossprod(g.std, weights*g.std))
+    V <- cbind(weights*((psi - eta) + int1),
+               weights*(a * (psi - eta) + int2))
+    sig2 <- t(c(0, a1 - a0)) %*%U %*% crossprod(V) %*% U %*% c(0, a1 - a0)
     
-    return(c(mu = mu, sig2 = unname(Sig[1,1])))
+    return(c(mu = mu, sig2 = sig2))
     
     
   } else

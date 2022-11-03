@@ -29,7 +29,7 @@ csme_aipw <- function(data){
     sig2 / (1 + (X%*%beta)^2*c(tau2 / sig2))
   }
   
-  function(theta, tau2, a){
+  function(theta, tau2, a0, a1){
   
     # model parameters
     gamma <- theta[2:(p + 1)]
@@ -55,7 +55,7 @@ csme_aipw <- function(data){
     disp_eqn <- sig2 - sig2*crossprod(scl, wts*scl)
 
     # prediction estimating equation
-    pred_eqn <- a * c(X %*% beta) - eta
+    pred_eqn <- (a1 - a0) * c(X %*% beta) - eta
     
     c(gps_num_eqn, gps_denom_eqn, ols_eqn1, ols_eqn2, disp_eqn, pred_eqn)   
     
