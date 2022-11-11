@@ -4,9 +4,11 @@ rm(list = ls())
 
 library(parallel)
 library(abind)
+library(splines)
 
 # Code for generating and fitting data
 source("~/Github/ME-Causal-Review/R/error_outcome/calibrate.R")
+source("~/Github/ME-Causal-Review/R/error_outcome/me_erf.R")
 
 ### Test RC/DR estimator
 n.sim <- 100
@@ -40,7 +42,7 @@ out <- mclapply(1:n.sim, function(i, ...) {
   y_true <- rnorm(n, mu_out, omega)
   y_me <- y_true + rnorm(n, eta_out, tau)
   
-  rho <- plogis(-1 + 0.5*x[,1] - 0.5*x[,4])
+  rho <- plogis(-2 + 0.5*x[,1] - 0.5*x[,4])
   val <- rbinom(n, 1, rho)
   
   true_erc <- sapply(a.vals, function(a.tmp, ...) {
@@ -52,14 +54,15 @@ out <- mclapply(1:n.sim, function(i, ...) {
 
   A0 <- a[val == 0]
   A1 <- a[val == 1]
-  X0 <- x[val == 0,]
-  X1 <- x[val == 1,]
+  X0 <- cbind(1, x[val == 0,])
+  X1 <- cbind(1, x[val == 1,])
   Y0 <- y_me[val == 0]
   Y1_me <- y_me[val == 1]
   Y1_true <- y_true[val == 1]
   
-  adjust <- out_bias(A0 = A0, A1 = A1, X0 = X0, X1 = X1, Y0 = Y0, Y1_me = Y1_me, 
-                     Y1_true = Y1_true, a.vals = a.vals, bw = 0.5)
+  adjust <- out_me(A0 = A0, A1 = A1, X0 = X0, X1 = X1,
+                     Y0 = Y0, Y1_me = Y1_me, Y1_true = Y1_true, 
+                     a.vals = a.vals, bw = 0.5)
   naive <- out_naive(A0, X0, Y0, a.vals = a.vals, bw = 0.5)
   
   return(list(est = t(data.frame(true_erc = true_erc, naive_est = naive$estimate, adjust_est = adjust$estimate)),
