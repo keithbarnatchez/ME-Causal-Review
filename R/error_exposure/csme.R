@@ -1,5 +1,5 @@
 # alpha: regression coefficients
-# beta: regression coefficients with delta
+# beta: regression coefficients interacting with delta
 # sig2: outcome model variance
 
 # X: covariate matrix
@@ -21,12 +21,12 @@ csme_aipw <- function(data){
   
   # not confident about the denominator to this estimator
   condexp <- function(X, alpha, beta, delta, tau2, sig2) {
-    (sum(X* alpha) + delta*sum(X*beta)) /
-      (1 + sum(X*beta)^2*c(tau2 / sig2))[[1]]
+    (X%*%alpha + delta*(X%*%beta)) /
+      (1 + (X%*%beta)^2*c(tau2 / sig2))
   }
   
   condvar <- function(X, beta, tau2, sig2) {
-    sig2 / (1 + sum(X*beta)^2*c(tau2 / sig2))[[1]]
+    sig2 / (1 + (X%*%beta)^2*c(tau2 / sig2))
   }
   
   function(theta, tau2, a){

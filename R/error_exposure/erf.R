@@ -1,8 +1,7 @@
 # wrapper function to fit a nonparametric ERF with measurement error using kernel-weighted regression
 erf <- function(a, y, x, family = gaussian(),
                 a.vals = seq(min(a), max(a), length.out = 100),
-                bw = NULL, bw.seq = seq(0.1, 2, by = 0.1), folds = 5,
-                sl.lib = c("SL.mean", "SL.glm")) {	
+                bw = 1, sl.lib = c("SL.mean", "SL.glm")) {	
   
   n <- length(a)
   weights <- rep(1, times = n) # placeholder until we can incorporate this
@@ -13,13 +12,9 @@ erf <- function(a, y, x, family = gaussian(),
   psi <- wrap$psi
   int.mat <- wrap$int.mat
   
-  # select bw if null
-  if (is.null(bw))
-    bw <- cv_bw(a = a, psi = psi, weights = weights, folds = folds, bw.seq = bw.seq)
-  
   # asymptotics
-  out <- sapply(a.vals, kern_est, psi = psi, a = a, weights = weights,
-                bw = bw, se.fit = TRUE, int.mat = int.mat, a.vals = a.vals)
+  out <- sapply(a.vals, kern, psi = psi, a = a, weights = weights, bw = bw, 
+                se.fit = TRUE, int.mat = int.mat, a.vals = a.vals)
   
   estimate <- out[1,]
   variance <- out[2,]
@@ -103,22 +98,25 @@ sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "
 }
 
 # Kernel weighted least squares
-kern_est <- function(a.new, a, psi, bw, weights = NULL, se.fit = FALSE, int.mat = NULL, a.vals = NULL) {
+kern <- function(a.new, a, psi, bw = 1, weights = NULL,  se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
   
   n <- length(a)
   
-  if(is.null(weights))
-    weights <- rep(1, times = length(a))
+  if (is.null(weights))
+    weights <- rep(1, times = n)
   
   # Gaussian Kernel
   a.std <- (a - a.new) / bw
   k.std <- dnorm(a.std) / bw
   g.std <- cbind(1, a.std)
   
-  b <- lm(psi ~ -1 + g.std, weights = k.std*weights)$coefficients
-  mu <- b[1] + b[3]
+  b <- lm(psi ~ -1 + g.std, weights = weights*k.std)$coefficients
+  mu <- unname(b[1])
   
-  if (se.fit & !is.null(int.mat)) {
+  if (se.fit & !is.null(int.mat) & !is.null(a.vals)) {
+    
+    if (!(a.new %in% a.vals))
+      stop("!(a.new %in% a.vals)")
     
     eta <- c(g.std %*% b)
     
@@ -134,45 +132,14 @@ kern_est <- function(a.new, a, psi, bw, weights = NULL, se.fit = FALSE, int.mat 
                       (intfn2.mat[,-1] + intfn2.mat[,-length(a.vals)])/2)
     
     U <- solve(crossprod(g.std, weights*k.std*g.std))
-    V <- cbind(weights * (k.std * (psi - eta) + int1),
-               weights * (a.std * k.std * (psi - eta) + int2))
-    sig <- U %*% crossprod(V) %*% U
+    V <- cbind(weights*(k.std * (psi - eta) + int1),
+               weights*(a.std * k.std * (psi - eta) + int2))
+    Sig <- U %*% crossprod(V) %*% U
     
-    return(c(mu = mu, sig = sig[1,1]))
+    return(c(mu = mu, sig2 = unname(Sig[1,1])))
+    
     
   } else
     return(mu)
-  
-}
-
-# k-fold cross validation to select bw
-cv_bw <- function(a, psi, weights = NULL, folds = 5, bw.seq = seq(0.1, 2, by = 0.1)) {
-  
-  if(is.null(weights))
-    weights <- rep(1, times = length(a))
-  
-  n <- length(a)
-  idx <- sample(x = folds, size = n, replace = TRUE)
-  
-  cv.mat <- sapply(bw.seq, function(h, ...) {
-    
-    cv.vec <- rep(NA, folds)
-    
-    for(k in 1:folds) {
-      
-      preds <- sapply(a[idx == k], kern_est, psi = psi.sub[idx != k], a = a.sub[idx != k], 
-                      weights = weights[idx != k], bw = h, se.fit = FALSE)
-      cv.vec[k] <- mean((psi.sub[idx == k] - preds)^2, na.rm = TRUE)
-      
-    }
-    
-    return(cv.vec)
-    
-  })
-  
-  cv.err <- colMeans(cv.mat)
-  bw <- bw.seq[which.min(cv.err)]
-  
-  return(bw)
   
 }
