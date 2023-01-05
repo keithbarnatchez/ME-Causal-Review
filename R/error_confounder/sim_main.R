@@ -23,6 +23,8 @@ library(mice) # for multiple imputation
 library(ipw) # calculating ATEs
 library(AER) # for instrumental variables
 library(betareg) # for using beta regression in PSC 
+library(parallel)
+options(show.error.locations = TRUE)
 # ------------------------------------------------------------------------------
 # Set up relevant paths for output
 flnm <- gsub(':','-',Sys.time()) # filename suffixed with date/time
@@ -32,7 +34,7 @@ simdir <- '../../output/sim_results/' # directory
 fullpath <- paste(simdir,flnm,sep='') # construct path to final file name 
 # ------------------------------------------------------------------------------
 # Set up simulation parameters
-methods <- c('simex_ind') 
+methods <- c('iv') 
 sig_u_grid <- c(0.1,0.5,0.9) # ME variances
 ba_grid <- c(1) # treatment effect
 n_grid <- c(5000) # sample size
@@ -40,6 +42,8 @@ bin_grid <- c(0) # 0/1 continuous/binary
 rho_grid <- c(0.2,0.8) # corr b/w x and z
 psi_grid <- c(0.5) # corr b/w v and x
 ax_grid <- 0.25 # coeff of x in the ps model
+bax_grid <- c(0.2) ;
+baz_grid <- c(0.2)
 # ------------------------------------------------------------------------------
 # Load correction/sim/output functions 
 source('correction_functions.R')
@@ -50,11 +54,12 @@ source('output_functions.R')
 op_chars <- get_results(methods,
                         sig_u_grid,
                         ba_grid,
+                        bax_grid, baz_grid,
                         n_grid, 
                         rho_grid,
                         psi_grid,
                         ax_grid,
-                        bin_grid, nsim=50)
+                        bin_grid, nsim=100)
 
 # Output the results as a csv
 

@@ -42,8 +42,8 @@ tmt_model <- function(X,Z,
 
 outcome_model <- function(A,X,Z,
                           ba = 1,
-                          bx = 1,
-                          bz = 1,
+                          bx = 1, bax=0.2,
+                          bz = 1, baz=0.2,
                           b0 = 0,
                           sig_e = 1,
                           binary=0) {
@@ -58,7 +58,7 @@ outcome_model <- function(A,X,Z,
   #' - a vector containing simulated values of the outcome Y, given the specified
   #'   dgp (governed by the user-supplied parameters)
   
-  mu <- b0 + ba*A + bx*X + bz*Z 
+  mu <- b0 + ba*A + bx*X + bz*Z + bax*A*X + baz*X*Z
 
   if (binary==0) { # if continuous outcome
     return( rnorm(length(X), mean = mu, sd=sig_e))
@@ -71,13 +71,13 @@ outcome_model <- function(A,X,Z,
 }
 
 generate_covariates <- function(n, rho, psi) {
-  #' Generates X, Z, and an instrument V from a multivariate normal distribution
-  #' It is assumed each of X, Z and V are marginally N(0,1), and that 
-  #' corr(X,Z)=rho, corr(X,V)=psi, and that corr(Z,V) = 0
+  #' Generates X1, X2, and an instrument V from a multivariate normal distribution
+  #' It is assumed each of X1, X2 and V are marginally N(0,1), and that 
+  #' corr(X1,X2)=rho, corr(X1,V)=psi, and that corr(X2,V) = 0
   #'  
   #' INPUTS:
-  #' - rho: correlation between X and Z
-  #' - psi: correlation between X and V
+  #' - rho: correlation between X1 and X2
+  #' - psi: correlation between X1 and V
   #' 
   #' OUTPUTS:
   #' - Matrix (X, Z, V) of simulated values following a MVN dist as specified
@@ -94,6 +94,7 @@ generate_data <- function(n,
                        rho=0.5, psi=0.5,
                        ax=0.5,az=0.5,a0=0,
                        ba=1,bx=1,bz=1,b0=0,
+                       bax=0.2, baz=0.2,
                        v_share=0.1,
                        binary=0) {
   #' Generates dataset with outcome variable y, error-prone exposure X with 
@@ -122,7 +123,7 @@ generate_data <- function(n,
   A <- tmt_model(X,Z,ax,az,a0)
   
   # Simulate outcome 
-  Y <- outcome_model(A,X,Z,ba,bx,bx,b0,sig_e,binary)
+  Y <- outcome_model(A,X,Z,ba,bx,bax,ba,baz,b0,sig_e,binary)
   
   # Simulate error-prone measurements
   W <- meas_model(X, sig_u) 

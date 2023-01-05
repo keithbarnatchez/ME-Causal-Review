@@ -1,86 +1,47 @@
-## Inputs
-
-# n = sample size
-# omega = outcome sd
-# sigma = true exposure sd
-# tau = exposure error sd
-# type = "replicate" or "validate"
-# mult = if type == "replicate", identifies  average # of replicates
-
-## Output
-
-# a = true exposures
-# z = single error prone exposures
-# s = replicate error prone exposures
-# y = outcomes
-# x = confounders
-# id = id for a and y
-# s.id = replicate id for s, same levels as id
-
-gen_data <- function(n = c(400, 800), omega = 2, sigma = sqrt(2), tau = 1, type = c("replicate", "validate"), mult = c(5, 10)) {
+gen_data <- function(n=1500,vshare=0.1,
+                     b0=0,bA=1,bX1=0.7,bX2=-0.7, bA_X1=0.2, bA_X2=0.1,
+                     muX1=0.5, muX2=1, muZ=1,
+                     a0=2,aX1=0.9,aX2=-0.6,aZ=0.5,
+                     sigU=0.3, sigA=1,sigE=1) {
   
-  # covariates
-  x1 <- stats::rnorm(n, 0, 1)
-  x2 <- stats::rnorm(n, 0, 1)
-  x3 <- stats::rnorm(n, 0, 1)
-  x4 <- stats::rnorm(n, 0, 1)
-  x <- cbind(x1, x2, x3, x4)
+  #' Code for simulating data with mismeasured exposure A
+  #'
+  #' Variables:
+  #' A: True exposure values
+  #' X1: BINARY confounder
+  #' X2: Continuous confonder
+  #' Z: continous instrument
+  #' Y: outcome
+  #' Astar: error-prone exposure measurements
+  #'
+  #' DGP:
+  #' A ~ norm(a0 + aX1(X1) + aX2(X2) + aZ(Z), sigA^2)
+  #' Y ~ norm(b0 + bA(A) + bX1(X1) + bX2(X2) +bAX1(snfksd))
+  #' Astar ~ norm(A, sigU^2+sigE^2)
   
-  mu_gps <- 10 + 0.5*x[,1] - 0.5*x[,2] - 0.5*x[,3] + 0.5*x[,4]
-
-  a <- rnorm(n, mu_gps, sigma)
-  id <- 1:n
+  # Simulate confounders
+  X1 <- rbinom(n,1,muX1) ; X2 <- rnorm(n,muX2,1)
   
-  if (type == "replicate") {
-    
-    if (mult == 10) {
-      s.id <- rep(id, rep(c(2,4,6,8,12,14,16,18), each = n/8))
-    } else if (mult == 5){
-      s.id <- rep(id, rep(c(1,2,3,4,6,7,8,9), each = n/8))
-    }
-    
-    stab <- table(s.id)
-    a_s <- rep(a, stab)  
-    s <- rnorm(mult*n, a_s, tau)
-    
-  } else {
-    
-    z <- rnorm(n, a*(1 - 0.25*x1 + 0.75*x2 + -0.75*x3 + 0.25*x4), tau)
-    
-  }
-
-  mu_out <- 2 - 0.75*x[,1] - 0.25*x[,2] + 0.25*x[,3] + 0.75*x[,4] +
-    0.25*(a - 10) - 0.75*cos(pi*(a - 6)/4) - 0.25*(a - 10)*x[,1]
+  # Simulate instrument
+  Z <- rnorm(n,muZ,1)
   
-  y <- rnorm(n, mu_out, omega) # Keith - try simulating and fitting a poisson model
+  # Simulate exposure
+  A <- rnorm(n,a0 + aX1*X1 + aX2*X2 + aZ*Z,sigA)
   
-  # create simulation dataset
+  # Simulate outcome
+  Y <- rnorm(n, 
+             b0 + bA*A + bX1*X1 + bX2*X2 + bA_X1*A*X1 + bA_X2*A*X2,
+             sigE)
   
-  if (type == "replicate")
-    sim <- list(a = a, s = s, y = y, x = x, x.id = id, s.id = s.id)
-  else
-    sim <- list(a = a, z = z, y = y, x = x, id = id)
-    
-    
-  return(sim)
+  # Simulate exposure measurements
+  Astar <- A + rnorm(n,mean = 0,sd = sigU)
   
+  # Get the validation idx
+  n_v <- floor(n*vshare)
+  v_idx <- sample( c(rep(1,n_v),rep(0,n-n_v)) )
+  
+  # Form the df
+  data <- data.frame(A=A,Y=Y,X1=X1,X2=X2,Z=Z,Astar=Astar,v_idx=v_idx)
+  
+  return(data)
 }
-
-# get the true sample ERF
-predict_example <- function(a.vals, x) {
-  
-  out <- rep(NA, length(a.vals))
-  
-  for(i in 1:length(a.vals)) {
-    
-    a.vec <- rep(a.vals[i],nrow(x))
-    mu_out <- 2 + x %*% c(-0.75,-0.25,0.25,0.75) + 0.25*(a.vec - 10) - 
-      0.75*cos(pi*(a.vec - 6)/4) - 0.25*(a.vec - 10)*x[,1]
-    out[i] <- mean(mu_out)
-    
-  }
-  
-  return(out)
-  
-}
-

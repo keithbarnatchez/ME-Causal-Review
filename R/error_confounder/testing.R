@@ -30,8 +30,11 @@ slhat <- SuperLearner(Y=data$Y,  X=rhs_vars, family=gaussian, SL.library = 'SL.g
 glmhat <- lm(Y ~ X + A + Z,data=data)$fitted.values
 
 # Get muhat|X,A=0, muhat|X,A=1
-
-
+Y<-data$Y
+A<-data$A
+W<-data$W
+Z<-data$Z
+tau2<-0.3
 #-------------------------------------------------
 # Test correction functions 
 
@@ -41,6 +44,7 @@ ate_psc <- psc(data,nboot=100,iptw=1)
 ate_iv <- iv_confounder(data) # IV
 ate_mime <- mime(data)
 ate_simex <- simex_indirect(data,nboot=0)
+ate_simex_direct <- simex_direct(data$Y,data$A,data$W,data$Z,family=gaussian(),tau2=0.3)
 
 # ------------------------------------------------
 # Test the get_results() function

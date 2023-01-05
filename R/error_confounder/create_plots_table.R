@@ -11,11 +11,12 @@ source('plotting_functions.R')
 # }
 
 # Merge most recent round with previous
-df1 <- read.csv('../../output/sim_results/sim_results_2022-10-03_20-28-42.csv')
-df2 <- read.csv('../../output/sim_results/sim_results_2022-10-31_12-56-13.csv')
-df2 <- df2 %>% filter(method=='SIMEX')
+df1 <- read.csv('../../output/sim_results/res_merged.csv')
+df1 <- df1 %>% select(-X.1)
+df2 <- read.csv('../../output/sim_results/sim_results_2022-11-30_23-04-07.csv')
+df2 <- df2 %>% filter(method=='SIMEX dir.')
 df <- rbind(df1,df2)
-write.csv(df,file='../../output/sim_results/res_merged.csv')
+write.csv(df,file='../../output/sim_results/res_merged_1202.csv')
 # opcharspath <- "../../output/sim_results/sim_results_2022-10-03_20-28-42.csv"
 # df <- read.csv(opcharspath)
 

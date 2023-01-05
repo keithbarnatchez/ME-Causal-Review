@@ -1,43 +1,44 @@
 
-# wrapper for hct-dr.R to allow for SIMEX correction
-simex <- function(s, y, x, id, s.id, family = gaussian(), offset = rep(0, length(y)), # measurement error values
-                  n.boot = 100, degree = 3, lambda = seq(0.1, 2.1, by = 0.25), # simex parameters
-                  a.vals = seq(min(a), max(a), length.out = 20), mc.cores = 3, # erc() parameters
-                  span = NULL, span.seq = seq(0.15, 1, by = 0.05), k = 5){ # cross validation shenanigans
+## wrapper for erf.R to allow for SIMEX correction
 
+# z = mismeasured exposure
+# x = covariate data
+# a1 - a0 = points to be contrasted
+# degree = polynomial function to extrapolate
+# mc.cores = faster SIMEX with multicore processing?
+# n.boot = number of bootstrap resamples
+# tau2 = estimated measurement error variance
+
+simex <- function(z, y, x, a0, a1, family = gaussian(),
+                  n.boot = 100, degree = 2, mc.cores = 3,
+                  tau2, lambda = seq(0.1, 2.1, by = 0.25)) {
   
-  if (any(duplicated(id)))
-    stop("duplicate id detected")
-  
-  l.vals <- mclapply(lambda, function(lam, s, y, x.mat, id, s.id, ...){
+  l.vals <- mclapply(lambda, function(lam, z, y, x, a0, a1, sl.lib, ...){
     
-    z.mat <- replicate(n.boot, sapply(id, function(i, ...)
-      mean(s[s.id == i]) + sqrt(lam/sum(s.id == i))*contr(s[s.id == i])))
+    z.mat <- replicate(n.boot, z + sqrt(lam)*rnorm(length(z), 0, sqrt(tau2)))
     
-    vals <- apply(z.mat, 2, erc, y = y, x = x.mat, offset = offset, span = span,
-                  family = family, a.vals = a.vals, sl.lib = sl.lib)
+    vals <- apply(z.mat, 2, erf, y = y, a1 = a1, a0 = a0,
+                  x = x, family = gaussian(), sl.lib = sl.lib)
     
-    mu.vals <- do.call(rbind, lapply(vals, function(o) o$estimate))
-    sig.vals <- do.call(rbind, lapply(vals, function(o) o$variance))
+    mu.vals <- do.call(c, lapply(vals, function(o) o$estimate))
+    sig.vals <- do.call(c, lapply(vals, function(o) o$variance))
     
-    m.vals <- matrix(rep(colMeans(mu.vals), n.boot), byrow = TRUE,
-                     ncol = length(a.vals), nrow = n.boot)
-    s.hat <- colSums((mu.vals - m.vals)^2)/(n.boot - 1)
-    tau.hat <- colMeans(sig.vals)
+    s.hat <- var(mu.vals)
+    sig.hat <- mean(sig.vals)
     
-    return(list(estimate = colMeans(mu.vals), variance = tau.hat - s.hat))
+    return(list(estimate = mean(mu.vals), variance = sig.hat - s.hat))
     
-  }, s = s, y = y, x.mat = x, id = id, s.id = s.id, mc.cores = mc.cores)
+  }, z = z, y = y, x = x, a0 = a0, a1 = a1, sl.lib = sl.lib, mc.cores = mc.cores)
   
   if (any(lambda == 0)){
     
-    Psi <- do.call(rbind, lapply(l.vals, function(o) o$estimate))[,-which(lambda == 0)]
-    Phi <- do.call(rbind, lapply(l.vals, function(o) o$variance))[,-which(lambda == 0)]
+    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))[,-which(lambda == 0)]
+    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))[,-which(lambda == 0)]
     
   } else {
     
-    Psi <- do.call(rbind, lapply(l.vals, function(o) o$estimate))
-    Phi <- do.call(rbind, lapply(l.vals, function(o) o$estimate))
+    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))
+    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))
     
   }
   
@@ -51,19 +52,3 @@ simex <- function(s, y, x, id, s.id, family = gaussian(), offset = rep(0, length
   return(out)
   
 }
-
-contr <- function(si) {
-  
-  xi <- rnorm(length(si), 0, 1)
-  
-  if (length(xi) == 1){
-    
-    return(0)
-    
-  }
-  
-  ci <- (xi - mean(xi))/sqrt(sum((xi - mean(xi))^2))
-  return(sum(ci*si))
-    
-}
-
