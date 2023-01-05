@@ -42,7 +42,7 @@ calc_stats <- function(data,methods,a,s) {
   stats <- data.frame(bias=bias_ideal,ATE=ATE_ideal[[1]],ci_cov=ci_cov_ideal,pow=pow_ideal,method='Ideal',iteration=s)
   stats <- rbind(stats, data.frame(bias=bias_naive,ATE=ATE_naive[[1]],ci_cov=ci_cov_naive,pow=pow_naive,method='Naive',iteration=s))
                          
-  # SIMEX
+  # SIMEX (indirect method)
   if ('simex_ind' %in% methods) {
     # Get ATE estimate
     ATE <- simex_indirect(data) 
@@ -53,7 +53,21 @@ calc_stats <- function(data,methods,a,s) {
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias=bias,ATE=ATE[[1]],
                                      ci_cov=ci_cov,pow=pow,
-                                     method='SIMEX',iteration=s))
+                                     method='SIMEX ind.',iteration=s))
+  }
+  
+  if ('simex_direct' %in% methods) {
+    # Get ATE estimate
+    tau2 <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)]) 
+    simex_res <- simex_direct(data$Y, data$A, data$W, data$Z,family=gaussian(),tau2=tau2)
+    
+    # Get bias
+    bias <- simex_res$estimate-a ; CI <- simex_res$ci
+    ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
+    stats <- rbind(stats, data.frame(bias=bias,ATE=simex_res$estimate,
+                                     ci_cov=ci_cov,pow=pow,
+                                     method='SIMEX dir.',iteration=s))
   }
   
   # PSC using IPTW
@@ -103,7 +117,7 @@ calc_stats <- function(data,methods,a,s) {
 
 
 get_stats_table <- function(methods,
-                            u,a,n,
+                            u,a,bax,baz,n,
                             rho,psi,ax,b,
                             nsim) {
   #' For a given iteration, calculates the following stats of interest:
@@ -125,25 +139,29 @@ get_stats_table <- function(methods,
   #'     - ATE: average ATE estimate
   #'     - ci_cov: 95% CI coverage (share of CIs containing true ATE)
   #'     - u: ME variance
-  #'     - a: true ATE
+  #'     - a: true main tmt eff
+  #'     - bax:
+  #'     - baz:
   #'     - n: sample size
   #'     - b: whether outcome is binary or not
   #'     
   
   # set up dataframe for calculating operating characteristics by group
-  sim_stats_list <- lapply(1:nsim, function(s, n, u, a, b, rho, psi, ax, ...) {
+  sim_stats_list <- lapply(1:nsim, function(s, n, u, a, bax, baz, b, rho,
+                                            psi, ax, ...) {
     
     # Keep track of progress
     print(paste('On iteration',s,'of',nsim))
     
     # simulate data for current iteration
     data <- generate_data(n,sig_u=u,ba=a,binary=b,
-                          rho=rho, psi=psi, ax=ax)
+                          rho=rho, psi=psi, ax=ax,
+                          bax=bax,baz=baz)
 
     # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
     return(calc_stats(data,methods,a,s))
     
-  }, n = n, u = u, a = a, b = b, rho=rho, psi=psi, ax=ax) # for s in 1:nsim
+  }, n = n, u = u, a = a, bax = bax, baz = baz, b = b, rho=rho, psi=psi, ax=ax) # for s in 1:nsim
   
   sim_stats <- do.call(rbind, sim_stats_list)
 
@@ -158,6 +176,7 @@ get_stats_table <- function(methods,
   # make note of the grid point
   final_stats$u=u ; final_stats$a=a ; final_stats$n=n ; final_stats$b=b
   final_stats$rho = rho ; final_stats$psi = psi ; final_stats$ax=ax
+  final_stats$bax = bax ; final_stats$baz = baz
   
   return(final_stats)
 } # calc_stats
@@ -165,6 +184,7 @@ get_stats_table <- function(methods,
 get_results <- function(methods,
                         sig_u_grid, # me variance
                         ba_grid,    # tmt effect
+                        bax_grid, baz_grid, # interaction grid
                         n_grid,     # n
                         rho_grid,   # corr bw x and z
                         psi_grid,   # corr bw x and instrument v
@@ -195,7 +215,9 @@ get_results <- function(methods,
   #'   method and specific values of sig_u, ba, n, etc)
   
   # Initialize dataframe for each stat of interest
-  scen_df <- expand.grid(sig_u = sig_u_grid, ba = ba_grid, n = n_grid,
+  scen_df <- expand.grid(sig_u = sig_u_grid, ba = ba_grid, 
+                         bax = bax_grid, baz = baz_grid,
+                         n = n_grid,
                          rho=rho_grid, psi = psi_grid, ax=ax_grid,
                          bin = bin_grid,
                          KEEP.OUT.ATTRS = TRUE, stringsAsFactors = FALSE)
@@ -206,15 +228,16 @@ get_results <- function(methods,
     
     u <- scen$sig_u # me variance
     a <- scen$ba # effect size
+    bax <- bax_grid ; baz <- baz_grid
     n <- scen$n # sample size
     rho <- scen$rho
     psi <- scen$psi
     ax <- scen$ax
     b <- scen$bin # binary outcome indicator
     
-    
+
     # Get operating characteristics for current grid point
-    op_tmp <- get_stats_table(methods,u,a,n,rho,psi,ax,b,nsim)
+    op_tmp <- get_stats_table(methods,u,a,bax,baz,n,rho,psi,ax,b,nsim)
     
     return(op_tmp)
     
@@ -228,8 +251,4 @@ get_results <- function(methods,
   return(op_chars)
 } # get_results 
 
-bias_plot <- function(results) {
-  
-  results %>% ggplot(aes(x=bias))
-  
-}
+
