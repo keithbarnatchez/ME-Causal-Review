@@ -1,5 +1,6 @@
 out_me <- function(A0, A1, X0, X1, Y0, Y1_me, Y1_true, 
-                     a.vals = seq(min(A0), max(A0), length = 100), bw = 1,...) {
+                   a.vals = seq(min(A0), max(A0), length = 100), bw = 1, 
+                   family = gaussian(), sl.lib = c("SL.mean", "SL.glm"), ...) {
   
   n1 <- nrow(X1)
   n0 <- nrow(X0)
@@ -12,32 +13,34 @@ out_me <- function(A0, A1, X0, X1, Y0, Y1_me, Y1_true,
   m <- ncol(X)
   
   ## outcome model
-  # mumod <- SuperLearner(Y = Y0, X = data.frame(X0, A = A0),
+  # mumod <- SuperLearner(Y = Y0, X = data.frame(X0[,-1], A = A0),
   #                       family = family, SL.library = sl.lib)
   # muhat <- mumod$SL.predict
   # 
-  # muhat.mat <- sapply(A0, function(a.tmp, ...) {
-  #   
+  # muhat.mat <- sapply(a.vals, function(a.tmp, ...) {
+  # 
   #   xa.tmp <- data.frame(X0, A = a.tmp)
   #   predict(mumod, newdata = xa.tmp)$pred
-  #   
+  # 
   # })
   # 
-  # mhat <- colMeans(muhat.mat)
-  
-  ## bias model
+  # mhat <- predict(smooth.spline(a.vals, colMeans(muhat.mat)), x = a)$y
+  # int0.mat <- matrix(rep(colMeans(muhat.mat), n0), byrow = TRUE, nrow = n0)
+  # 
+  # ## bias model
   # bias <- c(Y1_me - Y1_true)
-  # etamod <- SuperLearner(Y = bias, X = data.frame(X1, A = A1),
+  # etamod <- SuperLearner(Y = bias, X = data.frame(X1[,-1], A = A1),
   #                        family = family, SL.library = sl.lib)
   # 
-  # etahat.mat <- sapply(A1, function(a.tmp, ...) {
-  #   
+  # etahat.mat <- sapply(a.vals, function(a.tmp, ...) {
+  # 
   #   xa.tmp <- data.frame(X0, A = a.tmp)
   #   predict(mumod, newdata = xa.tmp)$pred
-  #   
+  # 
   # })
   # 
-  # mhat <- colMeans(muhat.mat)
+  # ehat <- predict(smooth.spline(a.vals, colMeans(etahat.mat)), x = a)$y
+  # int1.mat <- matrix(rep(colMeans(etahat.mat), n1), byrow = TRUE, nrow = n1)
   
   ## weight model
   
@@ -65,8 +68,8 @@ out_me <- function(A0, A1, X0, X1, Y0, Y1_me, Y1_true,
   out1 <- sapply(a.vals, kern_ipw, a = A1, psi = psi1, bw = bw, se.fit = TRUE)
   
   ## spline method
-  # out0 <- spl_ipw(a = A0, psi = psi0, a.vals = a.vals, df = 5, se.fit = TRUE)
-  # out1 <- spl_ipw(a = A1, psi = psi1, a.vals = a.vals, df = 5, se.fit = TRUE)
+  # out0 <- spl_ipw(a = A0, psi = psi0, a.vals = a.vals, df = 6, se.fit = TRUE)
+  # out1 <- spl_ipw(a = A1, psi = psi1, a.vals = a.vals, df = 6, se.fit = TRUE)
   
   estimate <- out0[1,] - out1[1,]
   se <- sqrt(out0[2,] + out1[2,])

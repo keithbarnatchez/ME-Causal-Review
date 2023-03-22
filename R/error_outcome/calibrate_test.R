@@ -5,6 +5,7 @@ rm(list = ls())
 library(parallel)
 library(abind)
 library(splines)
+library(SuperLearner)
 
 # Code for generating and fitting data
 source("~/Github/ME-Causal-Review/R/error_outcome/calibrate.R")
@@ -48,10 +49,10 @@ out <- mclapply(1:n.sim, function(i, ...) {
   true_erc <- sapply(a.vals, function(a.tmp, ...) {
     
     mean(2 - 0.75*x[val == 0,1] - 0.25*x[val == 0,2] + 0.25*x[val == 0,3] + 0.75*x[val == 0,4] +
-      0.25*(a.tmp - 10) - 0.75*cos(pi*(a.tmp - 6)/4) - 0.25*(a.tmp - 10)*x[val == 0,1])
+           0.25*(a.tmp - 10) - 0.75*cos(pi*(a.tmp - 6)/4) - 0.25*(a.tmp - 10)*x[val == 0,1])
     
   })
-
+  
   A0 <- a[val == 0]
   A1 <- a[val == 1]
   X0 <- cbind(1, x[val == 0,])
@@ -61,8 +62,8 @@ out <- mclapply(1:n.sim, function(i, ...) {
   Y1_true <- y_true[val == 1]
   
   adjust <- out_me(A0 = A0, A1 = A1, X0 = X0, X1 = X1,
-                     Y0 = Y0, Y1_me = Y1_me, Y1_true = Y1_true, 
-                     a.vals = a.vals, bw = 0.5)
+                   Y0 = Y0, Y1_me = Y1_me, Y1_true = Y1_true, 
+                   a.vals = a.vals, bw = 0.5)
   naive <- out_naive(A0, X0, Y0, a.vals = a.vals, bw = 0.5)
   
   return(list(est = t(data.frame(true_erc = true_erc, naive_est = naive$estimate, adjust_est = adjust$estimate)),
