@@ -15,7 +15,7 @@ source("~/Github/ME-Causal-Review/R/error_outcome/me_erf.R")
 n.sim <- 100
 
 # model arguments
-a.vals <- seq(6, 14, by = 0.02)
+a.vals <- seq(6, 14, by = 0.2)
 n <- 4000
 sigma <- 2
 omega <- 1
@@ -63,11 +63,11 @@ out <- mclapply(1:n.sim, function(i, ...) {
   
   adjust <- out_me(A0 = A0, A1 = A1, X0 = X0, X1 = X1,
                    Y0 = Y0, Y1_me = Y1_me, Y1_true = Y1_true, 
-                   a.vals = a.vals, bw = 0.5)
+                   a.vals = a.vals, bw = 0.5, se.fit = TRUE)
   naive <- out_naive(A0, X0, Y0, a.vals = a.vals, bw = 0.5)
   
   return(list(est = t(data.frame(true_erc = true_erc, naive_est = naive$estimate, adjust_est = adjust$estimate)),
-              se = t(data.frame(adjust_se = adjust$se, naive_se = naive$se))))
+              se = t(data.frame(naive_se = naive$se, adjust_se = adjust$se))))
   
 }, mc.cores = 8, mc.preschedule = TRUE)
 

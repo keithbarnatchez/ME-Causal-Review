@@ -31,15 +31,11 @@ out_me <- function(A0, A1, X0, X1, Y0, Y1_me, Y1_true,
   ipw <- mod$weights
   
   Y <- c(Y0, Y1_me - Y1_true)
-  psi <- Y
+  psi <- Y*ipw
   
   ## kernel weighted least squares
-  out <- sapply(a.vals, kern_ipw, a = A, s = S, x = X, psi = psi, ipw = ipw, 
+  out <- sapply(a.vals, kern_me, a = A, s = S, x = X, psi = psi, ipw = ipw, 
                 cmat = cmat, astar = astar, astar2 = astar2, bw = bw, se.fit = se.fit)
-  
-  ## spline method
-  # out0 <- spl_ipw(a = A0, psi = psi0, a.vals = a.vals, df = 6, se.fit = TRUE)
-  # out1 <- spl_ipw(a = A1, psi = psi1, a.vals = a.vals, df = 6, se.fit = TRUE)
   
   estimate <- out[1,]
   se <- sqrt(out[2,])
@@ -48,7 +44,7 @@ out_me <- function(A0, A1, X0, X1, Y0, Y1_me, Y1_true,
   
 }
 
-out_naive <- function(A0, X0, Y0, a.vals = seq(min(A0), max(A0), length = 100), bw = 1,...) {
+out_naive <- function(A0, X0, Y0, a.vals = seq(min(A0), max(A0), length = 100), bw = 1, se.fit = TRUE, ...) {
   
   n0 <- nrow(X0)
   m <- ncol(X0)
@@ -67,7 +63,9 @@ out_naive <- function(A0, X0, Y0, a.vals = seq(min(A0), max(A0), length = 100), 
   
   ## kernel weighted least squares
   psi0 <- c(ipw*Y0)
-  out <- sapply(a.vals, kern_naive, a = A0, psi = psi0, bw = bw, se.fit = TRUE)
+  out <- sapply(a.vals, kern_naive, a = A0, x = X0, psi = psi0, 
+                astar = astar, astar2 = astar2, cmat = cmat, ipw = ipw,
+                bw = bw, se.fit = se.fit)
   
   estimate <- out[1,]
   se <- sqrt(out[2,])
@@ -76,26 +74,8 @@ out_naive <- function(A0, X0, Y0, a.vals = seq(min(A0), max(A0), length = 100), 
   
 }
 
-esteq <- function(p, s, x, psi, g.std, astar, astar2, ipw, eta, theta) {
-  
-  eq1 <- (1 - s)*p*x*astar
-  eq2 <- (1 - s)*p*astar2
-  eq3 <- s*p*x*astar
-  eq4 <- s*p*astar2
-  
-  eq5 <- (1 - s)*(p*x - theta)
-  eq6 <- s*(p*x - theta)
-  eq7 <- (1 - s)*(x - theta)
-  
-  eq8 <- 2*p*(psi - eta)*g.std
-  
-  eq <- c(eq1, eq2, eq3, eq4, eq5, eq6, eq7, eq8) 
-  return(eq)
-  
-}
-
 # Kernel weighted least squares
-kern_ipw <- function(a.new, a, s, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fit = FALSE) {
+kern_me <- function(a.new, a, s, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fit = FALSE) {
   
   n <- length(a)
   m <- ncol(x)
@@ -105,7 +85,7 @@ kern_ipw <- function(a.new, a, s, x, psi, astar, astar2, cmat, ipw, bw = 1, se.f
   k.std <- dnorm(a.std) / bw
   g.std <- cbind((1 - s)*a.std, s*a.std, (1 - s), s)
   
-  b <- lm(psi ~ -1 + g.std, weights = k.std*ipw)$coefficients
+  b <- lm(psi ~ -1 + g.std, weights = k.std)$coefficients
   mu <- unname(b[3] - b[4])
   
   if (se.fit) {
@@ -123,11 +103,13 @@ kern_ipw <- function(a.new, a, s, x, psi, astar, astar2, cmat, ipw, bw = 1, se.f
       U[(3*m + 3):(4*m + 2),(4*m + 3):(5*m + 2)] <- U[(3*m + 3):(4*m + 2),(4*m + 3):(5*m + 2)] - diag(s[i], m, m)
       U[(4*m + 3):(5*m + 2),(4*m + 3):(5*m + 2)] <- U[(4*m + 3):(5*m + 2),(4*m + 3):(5*m + 2)] - diag(1 - s[i], m, m)
       
-      V[,1:(4*m + 2)] <- V[,1:(4*m + 2)] - k.std[i]*ipw[i]*(psi[i] - eta[i])*tcrossprod(g.std[i,],cmat[i,])
-      V[,(5*m + 3):(5*m + 6)] <- V[,(5*m + 3):(5*m + 6)] - k.std[i]*ipw[i]*tcrossprod(g.std[i,])
+      V[,1:(4*m + 2)] <- V[,1:(4*m + 2)] - k.std[i]*(psi[i] - eta[i])*tcrossprod(g.std[i,],cmat[i,])
+      V[,(5*m + 3):(5*m + 6)] <- V[,(5*m + 3):(5*m + 6)] - k.std[i]*tcrossprod(g.std[i,])
       
-      meat <- meat + tcrossprod(esteq(p = ipw[i], s = s[i], x = x[i,], psi = psi[i], g.std = g.std[i,],
-                                      astar = astar[i], astar2 = astar2[i], eta = eta[i], theta = theta))
+      meat <- meat + tcrossprod(esteq_me(p = ipw[i], s = s[i], x = x[i,], psi = psi[i],
+                                         g.std = g.std[i,], k.std = k.std[i],
+                                         astar = astar[i], astar2 = astar2[i], 
+                                         eta = eta[i], theta = theta))
       
     }
     
@@ -159,9 +141,10 @@ kern_ipw <- function(a.new, a, s, x, psi, astar, astar2, cmat, ipw, bw = 1, se.f
 }
 
 # Kernel weighted least squares
-kern_naive <- function(a.new, a, psi, bw = 1, se.fit = FALSE) {
+kern_naive <- function(a.new, a, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fit = FALSE) {
   
   n <- length(a)
+  m <- ncol(x)
   
   # Gaussian Kernel
   a.std <- (a - a.new) / bw
@@ -173,16 +156,76 @@ kern_naive <- function(a.new, a, psi, bw = 1, se.fit = FALSE) {
   
   if (se.fit) {
     
-    eta <- c(g.std %*% b)
-    U <- solve(crossprod(g.std, k.std*g.std))
-    V <- cbind(k.std * (psi - eta),
-               a.std * k.std * (psi - eta))
-    Sig <- U %*% crossprod(V) %*% U
+    U <- matrix(0, ncol = m + 1, nrow = m + 1)
+    V <- matrix(0, ncol = m + 3, nrow = 2)
+    meat <- matrix(0, ncol = m + 3, nrow = m + 3)
+    eta <- c(g.std%*%b)
     
-    return(c(mu = mu, sig2 = unname(Sig[1,1])))
+    for (i in 1:n) {
+      
+      U[1:(m + 1),1:(m + 1)] <- U[1:(m + 1),1:(m + 1)] - ipw[i] * tcrossprod(cmat[i,])
+      
+      V[,1:(m + 1)] <- V[,1:(m + 1)] - k.std[i]*(psi[i] - eta[i])*tcrossprod(g.std[i,],cmat[i,])
+      V[,(m + 2):(m + 3)] <- V[,(m + 2):(m + 3)] - k.std[i]*tcrossprod(g.std[i,])
+      
+      meat <- meat + tcrossprod(esteq_naive(p = ipw[i], x = x[i,], psi = psi[i],
+                                            g.std = g.std[i,], k.std = k.std[i],
+                                            astar = astar[i], astar2 = astar2[i], 
+                                            eta = eta[i]))
+      
+    }
     
+    invbread <- matrix(0, nrow = m + 3, ncol = m + 3)
+    invbread[1:(m + 1),1:(m + 1)] <- U
+    invbread[(m + 2):(m + 3), ] <- V
+    
+    bread <- try(solve(invbread), silent = TRUE)
+    
+    if (inherits(bread, "try-error")) {
+      
+      sandwich <- NA
+      variance <- NA
+      
+    } else {
+      
+      sandwich <- bread %*% meat %*% t(bread)
+      variance <- sandwich[m + 2, m + 2]
+      
+    }
+    
+    return(c(mu = mu, sig2 = variance))
     
   } else
     return(mu)
+  
+}
+
+esteq_me <- function(p, s, x, psi, g.std, k.std, astar, astar2, eta, theta) {
+  
+  eq1 <- (1 - s)*p*x*astar
+  eq2 <- (1 - s)*p*astar2
+  eq3 <- s*p*x*astar
+  eq4 <- s*p*astar2
+  
+  eq5 <- (1 - s)*(p*x - theta)
+  eq6 <- s*(p*x - theta)
+  eq7 <- (1 - s)*(x - theta)
+  
+  eq8 <- k.std*(psi - eta)*g.std
+  
+  eq <- c(eq1, eq2, eq3, eq4, eq5, eq6, eq7, eq8) 
+  return(eq)
+  
+}
+
+esteq_naive <- function(p, x, psi, g.std, k.std, astar, astar2, eta) {
+  
+  eq1 <- p*x*astar
+  eq2 <- p*astar2
+  
+  eq3 <- k.std*(psi - eta)*g.std
+  
+  eq <- c(eq1, eq2, eq3) 
+  return(eq)
   
 }
