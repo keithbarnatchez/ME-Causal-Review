@@ -149,10 +149,10 @@ kern_naive <- function(a.new, a, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fi
   # Gaussian Kernel
   a.std <- (a - a.new) / bw
   k.std <- dnorm(a.std) / bw
-  g.std <- cbind(1, a.std)
+  g.std <- cbind(a.std, 1)
   
   b <- lm(psi ~ -1 + g.std, weights = k.std)$coefficients
-  mu <- unname(b[1])
+  mu <- unname(b[2])
   
   if (se.fit) {
     
@@ -189,7 +189,7 @@ kern_naive <- function(a.new, a, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fi
     } else {
       
       sandwich <- bread %*% meat %*% t(bread)
-      variance <- sandwich[m + 2, m + 2]
+      variance <- sandwich[m + 3, m + 3]
       
     }
     
