@@ -165,7 +165,7 @@ kern_naive <- function(a.new, a, x, psi, astar, astar2, cmat, ipw, bw = 1, se.fi
       
       U[1:(m + 1),1:(m + 1)] <- U[1:(m + 1),1:(m + 1)] - ipw[i] * tcrossprod(cmat[i,])
       
-      V[,1:(m + 1)] <- V[,1:(m + 1)] - k.std[i]*(psi[i] - eta[i])*tcrossprod(g.std[i,],cmat[i,])
+      V[,1:(m + 1)] <- V[,1:(m + 1)] - k.std[i]*psi[i]*tcrossprod(g.std[i,],cmat[i,])
       V[,(m + 2):(m + 3)] <- V[,(m + 2):(m + 3)] - k.std[i]*tcrossprod(g.std[i,])
       
       meat <- meat + tcrossprod(esteq_naive(p = ipw[i], x = x[i,], psi = psi[i],
