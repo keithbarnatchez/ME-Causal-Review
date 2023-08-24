@@ -147,7 +147,7 @@ get_stats_table <- function(methods,
   #' 
   #' OUTPUTS:
   #' A dataframe with the following variables:
-  #'     - method: method used (psc, iv, etc)
+  #'     - method: method used (psc, øiv, etc)
   #'     - bias: average percent bias
   #'     - mse: mean squared error
   #'     - ATE: average ATE estimate
@@ -164,15 +164,26 @@ get_stats_table <- function(methods,
     # Keep track of progress
     print(paste('On iteration',s,'of',nsim))
     
-    # simulate data for current iteration
-    data <- gen_data(n,vshare=0.1,
-                     b0=0,bA=1,bX1=0.7,bX2=-0.7, bA_X1=bax1, bA_X2=bax2,
-                     muX1=0.5, muX2=1, muZ=1,
-                     a0=2,aX1=0.9,aX2=-0.6,aZ=0.5,
-                     sigU=u, sigA=1,sigE=1)
+    err <- 1
+    while (err==1) {
+      # simulate data for current iteration
+      data <- gen_data(n,vshare=0.1,
+                       b0=0,bA=1,bX1=0.7,bX2=-0.7, bA_X1=bax1, bA_X2=bax2,
+                       muX1=0.5, muX2=1, muZ=1,
+                       a0=2,aX1=0.9,aX2=-0.6,aZ=0.5,
+                       sigU=u, sigA=1,sigE=1)
+      
+      # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
+      curr_results <- try(calc_stats(data,methods,a,bax1,bax2,s))
+      
+      # As long as no error thrown (probably due to csme) then return results
+      # otherwise gen data again (seems to be a random problem)
+      if (class(curr_results)!='try-error') {
+        err <- 0
+      }
+    }
     
-    # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
-    return(calc_stats(data,methods,a,bax1,bax2,s))
+    return(curr_results)
     
   }, n = n, u = u, a = a,bax1 = bax1, bax2 = bax2) # for s in 1:nsim
   

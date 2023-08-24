@@ -173,7 +173,7 @@ psc_implement <- function(data) {
   
   # thinking about returning altered df but for now returning ipw
   # mean(data$Y * data$A * data$iptw) - mean(data$Y * (1-data$A) * data$iptw) 
-  outcome_mod <- lm(Y ~ A, weights=data$iptw,data=data)
+  ATE_mod <- lm(Y ~ A, weights=data$iptw,data=data)
   return(ATE_mod)
 }
 
@@ -231,7 +231,7 @@ psc_bootstrap <- function(data,nboot,iptw) {
   return(quantile(ests, probs=c(0.025,0.975)))
 }
 
-psc <- function(data,nboot=100,iptw=1) {
+psc <- function(data,nboot=2,iptw=1) {
   #' Outer function for the propensity score calibration method. Calls
   #' psc_implement to yield ATE estimate, and psc_bootstrap to obtain con
   #'
@@ -489,7 +489,29 @@ iv_confounder <- function(data) {
 #            Naive and ideal approaches
 # --------------------------------------------------------
 
+library(AIPW)
+library(SuperLearner)
+
 ate_ideal <- function(data) {
+  
+  covs <- c('X','Z') ; sl.lib <- c("SL.mean","SL.glm")
+  res <- AIPW$new(Y=data$Y,
+                 A=data$A,
+                 W=subset(data,select=covs),
+                 Q.SL.library = sl.lib,
+                 g.SL.library = sl.lib,
+                 verbose=FALSE)$fit()$summary()
+  
+  ate_est <- res$estimates$RD['Estimate']
+  ci <- c(res$estimates$RD['95% LCL'],
+          res$estimates$RD['95% UCL'])
+  
+  return(list(ate_est, ci))
+  
+  
+}
+
+ate_ideal_linear <- function(data) {
   #' Computes ATE under ideal conditions (using X, correctly specified model)
   #' 
   #' Returns ATE estimate
@@ -506,6 +528,25 @@ ate_ideal <- function(data) {
 }
 
 ate_naive <- function(data) {
+  
+  covs <- c('W','Z') ; sl.lib <- c("SL.mean","SL.glm")
+  res <- AIPW$new(Y=data$Y,
+                  A=data$A,
+                  W=subset(data,select=covs),
+                  Q.SL.library = sl.lib,
+                  g.SL.library = sl.lib,
+                  verbose=FALSE
+  )$fit()$summary()
+  
+  ate_est <- res$estimates$RD['Estimate']
+  ci <- c(res$estimates$RD['95% LCL'],
+          res$estimates$RD['95% UCL'])
+  
+  return(list(ate_est, ci))
+  
+}
+
+ate_naive_linear <- function(data) {
   #' Computes ATE when naively using W in place of X in estimating propensity
   #' scores, but with otherwise correctly-specified model
   #' 

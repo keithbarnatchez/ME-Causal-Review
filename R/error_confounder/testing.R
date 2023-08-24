@@ -14,7 +14,7 @@ source('data_functions.R')
 source('output_functions.R')
 
 # Simulation code 
-n <- 1e4 # obs 
+n <- 1.5e3 # obs 
 
 # Generate the data
 data <- generate_data(n,sig_u = 0.3,binary=0,
@@ -45,7 +45,6 @@ ate_iv <- iv_confounder(data) # IV
 ate_mime <- mime(data)
 ate_simex <- simex_indirect(data,nboot=0)
 ate_simex_direct <- simex_direct(data$Y,data$A,data$W,data$Z,family=gaussian(),tau2=0.3)
-
 # ------------------------------------------------
 # Test the get_results() function
 

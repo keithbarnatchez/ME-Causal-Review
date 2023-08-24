@@ -131,7 +131,7 @@ csme_linear <- function(Y,A,X1,X2,A.star,
 }
 
 simex_direct <- function(z, y, x, a0, a1, family = gaussian(),
-                  n.boot = 100, degree = 2, mc.cores = 3,
+                  n.boot = 50, degree = 2, mc.cores = 3,
                   tau2, lambda = seq(0.1, 2.1, by = 0.25)) {
   #' Direct simex correction
   #' z = mismeasured exposure
@@ -144,6 +144,7 @@ simex_direct <- function(z, y, x, a0, a1, family = gaussian(),
   
   l.vals <- lapply(lambda, function(lam, z, y, x, a0, a1, sl.lib, ...){
     
+    # simulate nboot 
     z.mat <- replicate(n.boot, z + sqrt(lam)*rnorm(length(z), 0, sqrt(tau2)))
     
     vals <- apply(z.mat, 2, erf, y = y, a1 = a1, a0 = a0,
@@ -193,14 +194,25 @@ iv_interaction <- function(Y,A,X1,X2,A.star,Z) {
   #' Given input data/valid instrument Z from gen_data(), outputs the results
   #' of a 2SLS estimation of the assumed DGP model
   #' 
+  #' Uses the ivreg package
   #'
-  #'
   
-  # Fit first stage
-  Ahat <- lm(A.star ~ X1 + X2 + Z)
+  # Construct instruments for interaction terms
+  ZX1 <- Z*X1 ; ZX2 <- Z*X2 
   
-  # Second stage
+  # Construct interaction terms
+  AX1 <- A.star*X1 ; AX2 <- A.star*X2 ; X1X2 <- X1*X2
   
+  # Fit (endogenous | exogenous | instruments)
+  res <- ivreg::ivreg(Y ~ X1 + X2 + X1X2 | A.star + AX1 + AX2 | Z + ZX1 + ZX2)
+  
+  # Get ATE estimate 
+  est <- res$coefficients['A.star'] + res$coefficients['AX1']*mean(X1) +
+    res$coefficients['AX2']*mean(X2) 
+  
+  # Variance est (pretty sure this is wrong)
+  sig2a <- vcov(est)['A.star','A.star'] ; sig2ax1 < vcov(est)['AX1','AX2']
+  sig2ax2 < vcov(est)['AX1','AX2']
   
   
 

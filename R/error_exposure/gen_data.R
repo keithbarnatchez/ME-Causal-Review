@@ -1,3 +1,29 @@
+gen_corr_norm_bern <- function(n,
+                               rho,
+                               p=0.5) {
+  #' Given a sample size b and desired correlation rho, returns a std normal
+  #' rv Y and mean p bernoulli rv B with correlation rho
+  
+  # Find 1-pth quantile of X1
+  x0 <- qnorm(1-p)
+  
+  # Generate X1, X2 to be ind std normal
+  X1 <- rnorm(n) ; X2 <- rnorm(n)
+  
+  # Define r for setting correlation
+  r <- rho*sqrt(p*(1-p))/dnorm(x0)
+  
+  # Define Y 
+  Y <- r*X1 + sqrt(1-r^2)*X2
+  
+  # Define B
+  B <- ifelse(X1>x0,1,0)   
+  
+  return(cbind(B,Y))
+  
+}
+
+
 gen_data <- function(n=1500,vshare=0.1,
                      b0=0,bA=1,bX1=0.7,bX2=-0.7, bA_X1=0.2, bA_X2=0.1,
                      muX1=0.5, muX2=1, muZ=1,
@@ -20,7 +46,9 @@ gen_data <- function(n=1500,vshare=0.1,
   #' Astar ~ norm(A, sigU^2+sigE^2)
   
   # Simulate confounders
-  X1 <- rbinom(n,1,muX1) ; X2 <- rnorm(n,muX2,1)
+  # X1 <- rbinom(n,1,muX1) ; X2 <- rnorm(n,muX2,1)
+  X <- gen_corr_norm_bern(n,rho=0.5,p=muX1)
+  X1 <- X[,1] ; X2 <- X[,2]+muX2
   
   # Simulate instrument
   Z <- rnorm(n,muZ,1)

@@ -38,7 +38,7 @@ label_handler <- function(var) {
   
   # y vars
   if (var=='bias') return('Percent bias')
-  if (var=='mse') return('RMSE')
+  if (var=='mse') return('MSE')
   if (var=='ci_cov') return('95% CI coverage rate')
 }
 
@@ -102,7 +102,7 @@ line_plot <- function(op_chars,xvar,yvar,
   
   # Fix values at defaults via filtering
   for (i in 1:length(fixed_vars)) { # loop over the variables being kept fixed
-  
+    
     # Assert that the default values are actually used  in the simulation.
     # If not, throw an error message so the user can fix it
     # <...> !( fixed_defaults[i] %in% op_chars[fixed_vars[i]] )
@@ -125,18 +125,18 @@ line_plot <- function(op_chars,xvar,yvar,
   
   # Make the title
   plt_title <- paste(label_handler(yvar),'of ME correction methods')
-
+  
   # Make the plot
   op_chars %>% ggplot(aes(x=eval(as.name(xvar)),
                           y=eval(as.name(yvar)),
                           color=method)) + 
-               geom_line(size=0.75) + geom_point(size=2) +
-               labs(x=label_handler(xvar),
-                    y=label_handler(yvar),
-                    title=plt_title,
-                    caption=subt,
-                    subtitle=paste('Varying',label_handler(xvar)),
-                    color='Method')
+    geom_line(size=0.75) + geom_point(size=2) +
+    labs(x=label_handler(xvar),
+         y=label_handler(yvar),
+         title=plt_title,
+         caption=subt,
+         subtitle=paste('Varying',label_handler(xvar)),
+         color='Method')
   
   # Want to save to current figure 
   # first make the filename (format xvar_yvar_)

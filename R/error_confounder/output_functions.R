@@ -82,7 +82,7 @@ calc_stats <- function(data,methods,a,s) {
   }
   
   if ('psc_reg' %in% methods) {
-    ATE <- psc(data,iptw=0) 
+    ATE <- psc(data,iptw=0,nboot=2) 
     bias <- ATE[[1]]-a ; CI <- ATE[[2]]
     ci_cov <- ifelse( (CI[1] <= a) & (a <= CI[2]), 1 ,0  )
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
@@ -146,24 +146,42 @@ get_stats_table <- function(methods,
   #'     - b: whether outcome is binary or not
   #'     
   
-  # set up dataframe for calculating operating characteristics by group
-  sim_stats_list <- lapply(1:nsim, function(s, n, u, a, bax, baz, b, rho,
-                                            psi, ax, ...) {
-    
-    # Keep track of progress
-    print(paste('On iteration',s,'of',nsim))
-    
-    # simulate data for current iteration
-    data <- generate_data(n,sig_u=u,ba=a,binary=b,
-                          rho=rho, psi=psi, ax=ax,
-                          bax=bax,baz=baz)
-
-    # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
-    return(calc_stats(data,methods,a,s))
-    
-  }, n = n, u = u, a = a, bax = bax, baz = baz, b = b, rho=rho, psi=psi, ax=ax) # for s in 1:nsim
+  # Set up parallel backend
+  registerDoParallel()
   
-  sim_stats <- do.call(rbind, sim_stats_list)
+  # set up dataframe for calculating operating characteristics by group
+  sim_stats <- foreach(s = 1:nsim, .combine = rbind) %dopar% {
+  
+    # Simulate data for current iteration
+    data <- generate_data(n, sig_u = u, ba = a, binary = b, rho = rho, psi = psi, ax = ax, bax = bax, baz = baz)
+    
+    # Calculate stats of interest (e.g., bias, whether CI covers true param val, etc)
+    return(calc_stats(data, methods, a, s))
+  }
+  
+  # Combine the results into a single dataframe
+  # sim_stats <- do.call(rbind, sim_stats_list)
+  
+  # Stop the parallel backend
+  stopImplicitCluster()
+  
+  # sim_stats_list <- lapply(1:nsim, function(s, n, u, a, bax, baz, b, rho,
+  #                                           psi, ax, ...) {
+  #   
+  #   # Keep track of progress
+  #   print(paste('On iteration',s,'of',nsim))
+  #   
+  #   # simulate data for current iteration
+  #   data <- generate_data(n,sig_u=u,ba=a,binary=b,
+  #                         rho=rho, psi=psi, ax=ax,
+  #                         bax=bax,baz=baz)
+  # 
+  #   # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
+  #   return(calc_stats(data,methods,a,s))
+  #   
+  # }, n = n, u = u, a = a, bax = bax, baz = baz, b = b, rho=rho, psi=psi, ax=ax) # for s in 1:nsim
+  # 
+  # sim_stats <- do.call(rbind, sim_stats_list)
 
   # Compute avg operating characteristics from stats of interest 
   final_stats <- sim_stats %>% group_by(method) %>%
