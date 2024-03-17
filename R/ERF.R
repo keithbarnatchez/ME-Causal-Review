@@ -3,7 +3,6 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
                 sl.lib = c("SL.mean", "SL.glm")) {	
   
   n <- length(a)
-  weights <- rep(1, times = n) # placeholder until we can incorporate this
   a.vals <- seq(min(a), max(a), length.out = 100)  # placeholder until we can incorporate this
   
   wrap <- sl_est(y = y, a = a, x = x, a.vals = a.vals, 
@@ -13,8 +12,8 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
   int.mat <- wrap$int.mat
   
   # asymptotics
-  results <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, weights = weights, 
-                  se.fit = TRUE, a.vals = a.vals, int.mat = int.mat)
+  results <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, se.fit = TRUE, 
+                      a.vals = a.vals, int.mat = int.mat)
   
   Mhat <- results[1]
   Vhat <- results[2]
@@ -32,9 +31,6 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
 
 # estimate glm outcome model
 sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "SL.glm"), ...) {
-  
-  if (is.null(weights))
-    weights <- rep(1, nrow(x))
   
   # set up evaluation points & matrices for predictions
   n <- nrow(x)
@@ -88,17 +84,12 @@ sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "
 }
 
 # Kernel weighted least squares
-contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
+contrast <- function(a0, a1, a, psi, bw = 1, se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
   
   n <- length(a)
   
-  if (is.null(weights))
-    weights <- rep(1, times = n)
-  
   # Regression
-  g.std <- cbind(1, a)
-  
-  mod <- lm(psi ~ a, weights = weights)
+  mod <- lm(psi ~ a)
   mu <- (a1 - a0)*mod$coefficients[2]
   
   if (se.fit & !is.null(int.mat) & !is.null(a.vals)) {
@@ -106,6 +97,7 @@ contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.v
     eta <- mod$fitted.values
     
     # Gaussian Kernel Matrix
+    g.std <- cbind(1, a)
     g.vals <- matrix(rep(a.vals, n), byrow = TRUE, nrow = n)
     intfn1.mat <- int.mat
     intfn2.mat <- g.vals * int.mat
@@ -117,8 +109,8 @@ contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.v
                            byrow = T, nrow = n)*
                       (intfn2.mat[,-1] + intfn2.mat[,-length(a.vals)])/2)
     
-    U <- solve(crossprod(g.std, weights*g.std))
-    V <- cbind(weights*((psi - eta) + int1), weights*(a * (psi - eta) + int2))
+    U <- solve(crossprod(g.std))
+    V <- cbind((psi - eta) + int1, a * (psi - eta) + int2)
     sig2 <- t(c(0, a1 - a0)) %*% U %*% crossprod(V) %*% U %*% c(0, a1 - a0)
     
     return(c(mu = mu, sig2 = sig2))

@@ -267,7 +267,7 @@ ate_mime <- function(data, m = 50, method = "aipw") {
   ATE_hat <- mean(ests) 
   bw_var <- sum((ests - ATE_hat)^2)/(length(ests)-1) # var bw ests
   wi_var <- mean(vars) # within variance
-  Vhat <- wi_var + ((1 + (1/length(ests))) * bw_var)
+  Vhat <- wi_var + (1 + (1/length(ests))) * bw_var
   CI_hat <- c(qnorm(.025)*sqrt(Vhat) + ATE_hat, qnorm(.975)*sqrt(Vhat) + ATE_hat)
   
   return(list(ATE = ATE_hat, CI = CI_hat))

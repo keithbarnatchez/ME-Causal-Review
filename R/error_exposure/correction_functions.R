@@ -284,7 +284,7 @@ erf_mime <- function(data, m = 50) {
   Mhat <- mean(ests) 
   bw_var <- sum((ests - Mhat)^2)/(length(ests) - 1) # var bw ests
   wi_var <- mean(vars) # within variance
-  Vhat <- wi_var + ((1 + (1/length(ests))) * bw_var)
+  Vhat <- wi_var + (1 + (1/length(ests))) * bw_var
   CI_hat <- c(qnorm(.025)*sqrt(Vhat) + Mhat, qnorm(.975)*sqrt(Vhat) + Mhat)
   
   return(list(EST = Mhat, CI = CI_hat))
