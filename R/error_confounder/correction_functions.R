@@ -1,582 +1,276 @@
 # ------------------------------------------------------------------------------
-# CAUSAL ME CORRECTION FUNCTIONS
+# CAUSAL ME CORRECTION FUNCTIONS - CONFOUNDER
 # ------------------------------------------------------------------------------
 # This file contains functions for implementing the following ME correction
-# methods: 1) propensity score calibration, 2) indirect SIMEX (Kyle et al. 2015),
-# 3) IV, 4) 
-#
-#
-#
-# ---------------------------------------------------------
-# utility functions to supplement other calculations
+# methods: 1) Propensity Score Calibration, 2) Regression Calibration,
+# 3) SIMEX, 4) IV, 5) MIME (Webb-Vargas, 2015)
 
-expit <- function(x) {
-  return(exp(x)/(1+exp(x)))
+# --------------------------------------------------------
+#            NAIVE AND IDEAL APPROACH
+# --------------------------------------------------------
+
+ate_ideal <- function(data) {
+  
+  #' Computes ATE under ideal conditions (using X, correctly specified model)
+  #'
+  #' Returns ATE estimate
+  
+  # Estimate ATE
+  mod <- with(data, aipw(a = A, y = Y, x = data.frame(W, X)))
+  
+  return(mod)
+  
 }
 
-simex_predictions <- function(simex_model) {
+ate_naive <- function(data) {
   
-  # Get log odds
-  lodds <- model.matrix(simex_model$model)%*%simex_model$coefficients
-  
-  return(expit(lodds)) # return predicted probabilities
-}
-
-aipw_simex <- function(W,y,A,Z, pihat=NULL,methods = 'SL.glm') {
-  
-  # Outcome model
-  Xmat <- data.frame(W,Z,A)
-  outcome_model <- SuperLearner(Y=y,X=Xmat,SL.library = methods, family=gaussian)
-  
-  # Predict cond on A=0, A=1
-  rhs0 <- Xmat %>% mutate(A=0) # scenario where all tmt vals are 0
-  rhs1 <- Xmat %>% mutate(A=1) # scenario where all tmt vals are 1
-  yhat0 <- predict(outcome_model,newdata=rhs0,X=Xmat,Y=y)$pred # E[Y|X,A=0]
-  yhat1 <- predict(outcome_model,newdata=rhs1,X=Xmat,Y=y)$pred # E[Y|X,A=1]
-  
-  if (is.null(pihat)) { # if aren't pre-supplying propensity scores
-    # Get predicted propensity scores
-    Xtilde <- Xmat %>% select(-A)
-    tmt_model <- SuperLearner(Y=A, X=Xtilde, SL.library=methods,family=binomial())
-    pihat <- predict(tmt_model, type='response')$pred
-  }
-  
-  # Calculate the AIPW estimate and return the result
-  return(  aipw_calc(y,A,pihat,yhat0,yhat1)  )
-}
-
-aipw <- function(data,pihat=NULL,methods = 'SL.glm') {
-  #' Main function for implementing AIPW estimator. Calls aipw_calc for the 
-  #' actual calculation after calculating all necessary objects
+  #' Computes ATE when naively using W in place of X in estimating propensity
+  #' scores, but with otherwise correctly-specified model
   #' 
-  #' INPUTS: 
-  #' - data: A dataframe created by the generate_data() function
-  #' - methods: Character vector with libraries to feed into SuperLearner. By
-  #'            default, we just use regular glm (no non-parametric stuff)
-  #'
-  #' Outputs:
-  #' - Estimate of the ATE
+  #' Returns ATE estimates
   
-  # Outcome model
-  y <- data$Y
-  X <- data %>% select(W,Z,A)
-  outcome_model <- SuperLearner(Y=y,X=X,SL.library = methods, family=gaussian)
+  # Estimate ATE
+  mod <- with(data, aipw(a = A, y = Y, x = data.frame(W.star, X)))
   
-  # Predict cond on A=0, A=1
-  rhs0 <- X %>% mutate(A=0) # scenario where all tmt vals are 0
-  rhs1 <- X %>% mutate(A=1) # scenario where all tmt vals are 1
-  yhat0 <- predict(outcome_model,newdata=rhs0,X=X,Y=y)$pred # E[Y|X,A=0]
-  yhat1 <- predict(outcome_model,newdata=rhs1,X=X,Y=y)$pred # E[Y|X,A=1]
-  
-  if (is.null(pihat)) { # if aren't pre-supplying propensity scores
-    # Get predicted propensity scores
-    Xtilde <- X %>% select(-A)
-    tmt_model <- SuperLearner(Y=X$A, X=Xtilde, SL.library=methods,family=binomial())
-    pihat <- predict(tmt_model, type='response')$pred
-  }
-  
-  # Calculate the AIPW estimate and return the result
-  return(  aipw_calc(y,data$A,pihat,yhat0,yhat1)  )
-}
-
-aipw_calc <- function(y,a,pihat,yhat0,yhat1) {
-  #' Implements the augmented inv probability estimator (see eq3 of Glynn &
-  #' Quinn, Political Analysis 2010)
-  #' INPUTS: 
-  #' - y: outcome
-  #' - a: exposure
-  #' - pihat: predicted propensity scores
-  #' - yhat0: E(Y|A=0,Z)
-  #' - yhat1: E(Y|A=1,Z)
-  #'
-  #' OUTPUTS:
-  #' - Estimate of ATE
-  
-  # Compute relevant terms for estimator
-  term1 <- a*y/pihat - (1-a)*y/(1-pihat)
-  term2 <- (a-pihat)/(pihat*(1-pihat))
-  term3 <- (1-pihat)*yhat1 + pihat*yhat0
-  
-  # ATE estimator
-  ATE_hat <- mean(term1 - term2*term3)
-  
-  # Sandwich estimator
-  Vhat <- (term1 - term2*term3) - ATE_hat
-  Vhat <- sum(Vhat^2)/(length(Vhat)^2)
-  
-  # Rely on asymptotics for CI construction
-  lower_ci <- ATE_hat - sqrt(Vhat)*qnorm(0.975)
-  upper_ci <- ATE_hat + sqrt(Vhat)*qnorm(0.975)
-  
-  return(list(ATE=ATE_hat,
-              CI=c(lower_ci,upper_ci),
-              VAR=Vhat) )
+  return(mod)
   
 }
 
-
-# ---------------------------------------------------------
 # ---------------------------------------------------------
 #                PROPENSITY SCORE CALIBRATION
 # ---------------------------------------------------------
+
 psc_implement <- function(data) {
-  #' Implements a modified Sturmer propensity score calibration approach, where
-  #' the ATE is estimated via IPTW. As such, a beta regression model is assumed
-  #' between the gold standard and naive propensity scores to ensure all predicted
-  #' weights are in (0,1)
-  #'  
-  #' INPUTS:
-  #' - data: Analysis dataset obtained from the generate_data() function
-  #'         
-  #' - v_idx: Logical vector marking observations that are part of validation
-  #'          dataset
-  #' OUTPUTS:
-  #' - Dataset containing IPTW weights obtained via PSC
+  
+  #' Fit propensity score model in main data so it can be projected to GS measure
+  #' via the model fitted with validation data
+  
+  # Estimate error-prone proopensity score
+  data$ep_ps <- predict(glm(A ~ W.star + X, data = data, family = binomial()), type = 'response') # getting ep pscores in main data
   
   # Fit propensity score models in validation data
-  val_data <- data[which(data$v_idx==1),]
-  ep_ps_mod <- glm(A ~ W + Z, data=val_data,family='binomial') # error-prone
-  gs_ps_mod <- glm(A ~ X + Z, data=val_data,family='binomial') # gold standard
-  val_data$ep_ps <- predict(ep_ps_mod, type='response') # predict ep pscores in val data
-  val_data$gs_ps <- predict(gs_ps_mod, type='response') # predict gs pscores in val data
-  
+  val_data <- data[which(data$val.idx == 1),]
+  gs_ps_mod <- glm(A ~ W + X, data = val_data, family = binomial()) # gold standard
+  val_data$gs_ps <- predict(gs_ps_mod, type = "response") # predict gs pscores in val data
+
   # Fit model relating gold-standard PS to error-prone PS
-  # ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
-  #                     link)
-  # Note: using beta regressions at the moment to respect 0/1 bounds and to 
-  # prevent issues with weights being negative 
-  n_val <- nrow(val_data)
-  val_data$gs_ps <- (val_data$gs_ps*(n_val-1) + 0.5)/n_val # smithson (2006) transformation to ensure (0,1) not [0,1]
-  ps_rel_model <- betareg(gs_ps ~ ep_ps + A, data=val_data)
+  ps_rel_model <- lm(gs_ps ~ A + ep_ps, data = val_data)
+
+  # fit error-prone outcome model
+  ps_epe_model <- lm(Y ~ A + ep_ps, data = data)
   
-  # Fit propensity score model in main data so it can be projected to GS measure
-  # via the model fitted with validation data
-  data$ep_ps <- predict(glm(A ~ W + Z, data=data,family='binomial'),
-                        type='response') # getting ep pscores in main data
-  # Use the GS-EP pscore model to predict GS pscores in the main data
-  data$gs_ps_hat <- predict(ps_rel_model,newdata=data,type='response') 
+  return(list(ps_rel_model, ps_epe_model))
   
-  # Project X and W
-  cal_mod <- lm(X ~ W, data=val_data)
-  data$xcal <- predict(cal_mod,newdata=data)
-  data$XX <- data$X ; data$X <- data$xcal
-  data$ps2 <- predict(gs_ps_mod,newdata=data,type='response')
-  data$X <- data$XX
-  
-  # Get weights for IPTW
-  data$iptw <- ifelse(data$A==1,
-                      1/data$gs_ps_hat,
-                      1/(1-data$gs_ps_hat))
-  data$iptw2 <- ifelse(data$A==1,
-                      1/data$ps2,
-                      1/(1-data$ps2))
-  
-  # thinking about returning altered df but for now returning ipw
-  # mean(data$Y * data$A * data$iptw) - mean(data$Y * (1-data$A) * data$iptw) 
-  outcome_mod <- lm(Y ~ A, weights=data$iptw,data=data)
-  return(ATE_mod)
 }
 
-psc_implement_reg <- function(data) {
-  # Fit propensity score models in validation data
-  val_data <- data[which(data$v_idx==1),]
-  ep_ps_mod <- glm(A ~ W + Z, data=val_data,family='binomial') # error-prone
-  gs_ps_mod <- glm(A ~ X + Z, data=val_data,family='binomial') # gold standard
-  val_data$ep_ps <- predict(ep_ps_mod, type='response') # predict ep pscores in val data
-  val_data$gs_ps <- predict(gs_ps_mod, type='response') # predict gs pscores in val data
+ate_psc <- function(data, nboot = 100) {
   
-  # Fit model relating gold-standard PS to error-prone PS
-  # ps_rel_model <- glm(gs_ps ~ ep_ps + A + Z, data=val_data, family=gaussian(link=),
-  #                     link)
-  ps_rel_model <- lm(gs_ps ~ ep_ps + A, data=val_data)
-  
-  # Fit propensity score model in main data so it can be projected to GS measure
-  # via the model fitted with validation data
-  data$ep_ps <- predict(glm(A ~ W + Z, data=data,family='binomial'),
-                        type='response') # getting ep pscores in main data
-  # Use the GS-EP pscore model to predict GS pscores in the main data
-  data$gs_ps_hat <- predict(ps_rel_model,newdata=data,type='response') 
-  
-  # fit the final model
-  ATE_mod <- lm(Y ~ A + gs_ps_hat, data=data)
-  return(list(ps_rel_model,ATE_mod))
-}
-
-psc_bootstrap <- function(data,nboot,iptw) {
-  #' Giving a specified number of bootstrap iterations, generates a bootstrap
-  #' confidence interval of the PSC ATE estimate
-  #' INPUTS:
-  #' - data: Analysis dataset obtained from the generate_data() function
-  #' - nboot: Bootstrap iterations
-  #' OUTPUTS:
-  #' - A vector containing the CI lower and upper bounds
-
-  # Current iteration
-  ests <- rep(NA,nboot)
-  for (b in 1:nboot) {
-    boot_idx <- sample(1:nrow(data),replace=T)
-    
-    if (iptw==1) {
-      curr_mod <-  psc_implement(data[boot_idx,])
-      ests[b] <- curr_mod$coefficients[2]
-    }
-    else {
-      curr_mods <-  psc_implement_reg(data[boot_idx,])
-      B_A<- curr_mods[[2]]$coefficients['A'] ; B_X <- curr_mods[[2]]$coefficients['gs_ps_hat']
-      L_A <- curr_mods[[1]]$coefficients['A'] ; L_X <- curr_mods[[1]]$coefficients['ep_ps']
-
-      ests[b] <-  B_A - L_A*B_X/L_X
-    }
-  }
-  return(quantile(ests, probs=c(0.025,0.975)))
-}
-
-psc <- function(data,nboot=100,iptw=1) {
   #' Outer function for the propensity score calibration method. Calls
   #' psc_implement to yield ATE estimate, and psc_bootstrap to obtain con
-  #'
-  #' INPUTS
-  #'
-  
+    
   # Get weights
-  if (iptw==1) {ATE_mod <- psc_implement(data)}
-  else {psc_mods <- psc_implement_reg(data)}
+  psc_mods <- psc_implement(data)
   
   # Estimate ATE
-  if (iptw==1) {
-    ATE <- ATE_mod$coefficients['A']
-  }
-  else {
-    B_A<- psc_mods[[2]]$coefficients['A']
-    B_X <- psc_mods[[2]]$coefficients['gs_ps_hat']
-    L_A <- psc_mods[[1]]$coefficients['A']
-    L_X <- psc_mods[[1]]$coefficients['ep_ps']
-    ATE <- B_A - L_A*B_X/L_X
+  B_A <- psc_mods[[2]]$coefficients['A']
+  B_X <- psc_mods[[2]]$coefficients['ep_ps']
+  L_A <- psc_mods[[1]]$coefficients['A']
+  L_X <- psc_mods[[1]]$coefficients['ep_ps']
+  ATE_hat <- B_A - L_A*B_X/L_X
+  
+  # Bootsrap
+  boot <- rep(NA, nboot)
+  
+  for (b in 1:nboot) {
+    
+    boot_idx <- sample(1:nrow(data), size = nrow(data), replace = TRUE)
+    boot_mod <- psc_implement(data[boot_idx,])
+    B_A <- boot_mod[[2]]$coefficients['A']
+    B_X <- boot_mod[[2]]$coefficients['ep_ps']
+    L_A <- boot_mod[[1]]$coefficients['A']
+    L_X <- boot_mod[[1]]$coefficients['ep_ps']
+    boot[b] <- B_A - L_A*B_X/L_X
+    
   }
   
   # Bootstrap to obtain confidence interval
+  CI_hat <- quantile(boot, probs = c(0.025, 0.975))
   
-  CI_est <- psc_bootstrap(data,nboot,iptw)
+  return(list(ATE = ATE_hat, CI = CI_hat))
+  
+}
 
+# ---------------------------------------------------------
+#                REGRESSION CALIBRATION
+# ---------------------------------------------------------
+
+ate_rc <- function(data, nboot = 100, method = "aipw") {
   
-  results <- list(ATE=ATE,
-                  CI =CI_est)
-  return(results)
+  #' Standard Regression Calibration
+  
+  val_data <- data[which(data$val.idx == 1),]
+  W.hat <- predict(lm(W ~ W.star + A + X, data = val_data), newdata = data)
+  
+  # fit error-prone model
+  if (method == "ipw")
+    rc_mod <- with(data, ipw(a = A, y = Y, x = data.frame(W.hat, X)))
+  else if (method == "aipw")
+    rc_mod <- with(data, aipw(a = A, y = Y, x = data.frame(W.hat, X)))
+  
+  ATE_hat <- rc_mod$ATE
+  boot <- rep(NA, nboot)
+
+  for (b in 1:nboot) {
+
+    boot_idx <- sample(1:nrow(data), size = nrow(data), replace = TRUE)
+    boot_data <- data[boot_idx,]
+    val_data <- data[which(boot_data$val.idx == 1),]
+    W.tilde <- predict(lm(W ~ W.star + A + X, data = val_data), newdata = boot_data)
+    
+    if (method == "ipw")
+      boot_mod <- with(boot_data, ipw(a = A, y = Y, x = data.frame(W.tilde, X)))
+    else if (method == "aipw")
+      boot_mod <- with(boot_data, aipw(a = A, y = Y, x = data.frame(W.tilde, X)))
+    
+    boot[b] <- boot_mod$ATE
+
+  }
+
+  # Bootstrap to obtain confidence interval
+  CI_hat <- quantile(boot, probs = c(0.025, 0.975))
+  
+  return(list(ATE = ATE_hat, CI = CI_hat))
+  
 }
 
 # ---------------------------------------------------------
 #                          SIMEX
 # ---------------------------------------------------------
 
-# ----------------------------
-# Direct method
-#' 
-#' simex_direct <- function(data, lam_grid, nboot=100, deg = 2) {
-#'   #' Function to implement the direct SIMEX adjustment as described in Kyle
-#'   #' et al. (2016)
-#'   #'
-#'   #' INPUTS:
-#'   #' - data:
-#'   #' - lam_grid: 
-#'   #' - nboot:
-#'   #' - deg:
-#'   #' 
-#'   #' OUTPUTS:
-#'   sig_u_hat <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)]) 
-#'   n <- nrow(data)
-#'   
-#'   lam_res <- lapply(lam_grid, function(lam,data){ 
-#'     
-#'     # get perturbed values of w
-#'     W_pert <- replicate(nboot, data$A + sqrt(lam)*rnorm(n,0,sig_u_hat))
-#' 
-#'     # Estimate naive ATE for each perturbed dataset
-#'     pert_ests <- apply(W_pert, 2, aipw_simex, y=data$Y,A=data$A,Z=data$Z)
-#'     
-#'     ate_ests <- do.call(c,lapply(pert_ests, function(e) e$ATE))
-#'     var_ests <- do.call(c,lapply(pert_ests, function(e) e$VAR))
-#'     
-#'     # Get within and between variance
-#'     between_var <- var(ate_ests)
-#'     within_var <- mean(var_ests)
-#'     
-#'     return(list(ATE=mean(ate_ests), VAR = within_var)  )
-#'   }, data=data)
-#'   
-#'   # 
-#'   ATEs <- do.call(c, lapply(lam_res, function(l) l$ATE)) 
-#'   VARs <- do.call(c, lapply(lam_res, function(l) l$VAR))
-#' }
-
-
-simex_indirect_implement <- function(data) {
-  #' Implements the indirect SIMEX adjustment described in Kyle et al. (2016)
-  #' Called within the simex_indirect() function
-  #' 
-  #' Returns a model object for the ATE
+ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 2, by = 0.2)) {
   
-  # Estimate ME variance via the validation data (i.e. sd of X-W in val data)
-  # Note: should be fine to do it this way since we're assuming non-dif/classical
-  # but may need to explore extensions
-  sig_u_hat <- sd(data$X[which(data$v_idx==1)] - data$W[which(data$v_idx==1)]) 
-  
-  # Run SIMEX on PS coefficient
-  ps_model <- glm(A ~ W + Z, data=data, family='binomial', x=TRUE)
-  simex_model <- simex(model=ps_model,
-                       SIMEXvariable = "W",
-                       measurement.error = sig_u_hat)
-  
-  # Get weights
-  # e_hat <- predict(simex_model,type='response')
-  e_hat <- simex_predictions(simex_model)
-  w_hat <- ifelse(data$A==1,
-                  1/e_hat,
-                  1/(1-e_hat))
-  data$w_hat <- w_hat
-  
-  # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=data$w_hat,data=data)
-  
-  return(ATE_mod)
-}
-
-simex_bootstrap <- function(data, nboot=1e3) {
-    #' Obtains a bootstrap confidence interval for the SIMEX-adjusted ATE estimate
-    #' Runs nboot instances of simex_indirect_implement, each with a new
-    #' bootstrapped dataset
-    #' INPUTS:
-    #' - data: The dataset to be bootstrapped
-    #' - nboot: Number of bootstrap iterations
-    #' OUTPUTS:
-    #' - A vector containing the lower and upper bound of a 95% CI
-
-    # Current iteration
-    ests <- rep(NA,nboot)
-    for (b in 1:nboot) {
-      boot_idx <- sample(1:nrow(data),replace=T)
-      curr_mod <-  simex_indirect_implement(data[boot_idx,])
-      ests[b] <- curr_mod$coefficients[2]
-    }
-    return(quantile(ests, probs=c(0.025,0.975)))
-}
-
-simex_indirect <- function(data, nboot=0) {
-  #' Implement the indirect SIMEX correction procedure described in Kyle et al.
-  #' (2016)
-  #'
   #' INPUTS:
-  #' - data: A dataframe created with the generate_data() function
-  #' - bs: Logical that = TRUE if want to bootstrap
-  #' 
-  #' OUTPUTS:
-  #' - Estimate of ATE
-  #' REQUIRED PACKAGES:
-  #' - simex
+  #' - data: simulation data
+  #' - degree: degree of jackknife extrapolation
+  #' - lambda: measurement error incrementation
+  #' - nboot: number of bootstrap resamples
   
-  # Get weights for IPTW
-  ATE_mod <- simex_indirect_implement(data)
-  ATE_est <- ATE_mod$coefficients[2]
-  print('ATE est:')
-  print(ATE_est)
+  sig_u_hat <- with(data, sd(W.star[which(val.idx == 1)] - W[which(val.idx == 1)]))
   
-  if (nboot>0) {
-    CI_est <- simex_bootstrap(data,nboot)
-  }
-  
-  return(list(ATE_mod$coefficients[2],
-              confint(ATE_mod)))
-}
-
-# -----------------------
-# Y = outcome
-# A = exposure
-# Z = covariate
-# W = mismeasured covariate data
-# family = outcome distribution
-# degree = polynomial function to extrapolate
-# mc.cores = faster SIMEX with multicore processing?
-# n.boot = number of bootstrap resamples
-# tau2 = estimated measurement error variance
-
-simex_direct <- function(Y, A, W, Z, family = gaussian(), tau2,
-                      n.boot = 100, degree = 2, mc.cores = 3,
-                      lambda = seq(0.1, 2.1, by = 0.25)) {
-  
-  l.vals <- lapply(lambda, function(lam, Z, Y, W, A, tau2, n.boot, ...){
+  l.vals <- lapply(lambda, function(lam, data, sig_u, nboot, method){
     
-    W.mat <- replicate(n.boot, W + sqrt(lam)*rnorm(length(W), 0, sqrt(tau2)))
+    W.mat <- replicate(nboot, data$W.star + sqrt(lam)*rnorm(nrow(data), 0, sig_u))
     
-    vals <- apply(W.mat, 2, function(W.tmp, A, Y, Z) {
-      
-      # Run SIMEX on PS coefficient
-      ps_model <- glm(A ~ W.tmp + Z, family = 'binomial', x = TRUE)
-      e_hat <- predict(ps_model, type = "response")
-      
-      ipw_hat <- ifelse(A == 1, 1/e_hat, 1/(1-e_hat))
+    vals <- apply(W.mat, 2, function(W.tmp, A, Z, Y, method) {
       
       # Estimate ATE
-      ATE_mod <- glm(Y ~ A, weights = ipw_hat, family = family) # need better method of weighting!
+      if (method == "aipw")
+        simex_mod <- aipw(a = A, y = Y, x = data.frame(W.tmp, Z))
+      else if (method == "ipw")
+        simex_mod <- ipw(a = A, y = Y, x = data.frame(W.tmp, Z))
       
-      estimate <- coef(ATE_mod)[2]
-      variance <- vcov(ATE_mod)[2,2]
+      ATE_hat <- simex_mod$ATE
+      Vhat <- simex_mod$VAR
       
-      return(c(estimate = estimate, variance = variance))
+      return(c(ATE = ATE_hat, VAR = Vhat))
       
-    }, A = A, Y = Y, Z = Z)
+    }, A = data$A, Z = data$X, Y = data$Y, method = method)
     
-    # mu.vals <- do.call(c, lapply(vals, function(o) o$estimate))
-    # sig.vals <- do.call(c, lapply(vals, function(o) o$variance))
-    mu.vals <- vals[1,] ; sig.vals <- vals[2,]
+    mu.vals <- vals[1,] 
+    sig.vals <- vals[2,]
     
     s.hat <- var(mu.vals)
     sig.hat <- mean(sig.vals)
     
-    return(list(estimate = mean(mu.vals), variance = sig.hat - s.hat))
+    return(list(est = mean(mu.vals), var = sig.hat - s.hat))
     
-  }, Y = Y, A = A, W = W, Z = Z, tau2 = tau2, n.boot = n.boot)
+  }, data = data, nboot = nboot, sig_u = sig_u_hat, method = method)
   
-  if (any(lambda <= 0)) {
-    
-    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))[,-which(lambda <= 0)]
-    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))[,-which(lambda <= 0)]
-    
-  } else {
-    
-    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))
-    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))
-    
-  }
+  Psi <- do.call(c, lapply(l.vals, function(o) o$est))
+  Phi <- do.call(c, lapply(l.vals, function(o) o$var))
   
-  L <- cbind(1, poly(lambda, degree = degree, raw = TRUE))
-  chi <- c(1, poly(-1, degree = degree, raw = TRUE))
-  estimate <- c(t(chi) %*% solve(t(L) %*% L) %*% t(L) %*% Psi)
-  variance <- c(t(chi) %*% solve(t(L) %*% L) %*% t(L) %*% Phi)
+  ATE_hat <- predict(mgcv::gam(Psi ~ s(lambda, k = k), data = data.frame(Psi = Psi, lambda = lambda)), 
+                     newdata = data.frame(lambda = -1))
+  Vhat <- predict(mgcv::gam(Phi ~ s(lambda, k = k), data = data.frame(Phi = Phi, lambda = lambda)), 
+                  newdata = data.frame(lambda = -1))
   
-  CI <- c(-qnorm(.975)*sqrt(variance) + estimate,
-          qnorm(.975)*sqrt(variance)  + estimate)
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + ATE_hat, qnorm(.975)*sqrt(Vhat) + ATE_hat)
   
-  out <- list(estimate = estimate, variance = variance, Psi = Psi, Phi = Phi, lambda = lambda,
-              ci=CI)
-  
-  return(out)
+  return(list(ATE = ATE_hat, CI = CI_hat))
   
 }
 
 # --------------------------------------------------------
-#                 Instrumental variables
+#                 INSTRUMENTAL VARIABLES
 # --------------------------------------------------------
 
-iv_confounder <- function(data) {
+ate_iv <- function(data) {
+  
   #' Implements instrumental variables correction 
   #'
   #' INPUTS: 
   #' - data: A dataframe created with the generate_data() function
   #' 
-  #' OUTPUTS:
-  #' - A list containing the ATE estimate and confidence interval
-  #' 
   #' REQUIRED PACKAGES:
   #' - AER
 
   # Fit the IV model (first and second stage) with AER package
-  iv_mod <- ivreg(Y ~ W + Z + A | Z + A + V, data=data)
+  iv_mod <- ivreg(Y ~ A + W.star + X | A + V + X, data = data)
   
-  return(list(iv_mod$coefficients[4], # point estimate
-         confint(iv_mod)[4,])) # confidence interval
-}
-
-# --------------------------------------------------------
-#            Naive and ideal approaches
-# --------------------------------------------------------
-
-ate_ideal <- function(data) {
-  #' Computes ATE under ideal conditions (using X, correctly specified model)
-  #' 
-  #' Returns ATE estimate
-  ps_model <- glm(A ~ X + Z, data=data, family='binomial')
-  e_hat <- predict(ps_model,type='response')
-  w_hat <- ifelse(data$A==1,
-                  1/e_hat,
-                  1/(1-e_hat))
-  # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=w_hat,data=data)
-  results <- list(ATE_mod$coefficients[2],
-                  confint(ATE_mod)[2,])
-  return(results)
-}
-
-ate_naive <- function(data) {
-  #' Computes ATE when naively using W in place of X in estimating propensity
-  #' scores, but with otherwise correctly-specified model
-  #' 
-  #' Returns ATE estimates
-  ps_model <- glm(A ~ W + Z, data=data, family='binomial') 
-  e_hat <- predict(ps_model,type='response')
-  w_hat <- ifelse(data$A==1,
-                  1/e_hat,
-                  1/(1-e_hat))
-  # Estimate ATE
-  ATE_mod <- lm(Y ~ A, weights=w_hat,data=data)
-  results <- list(ATE_mod$coefficients[2],
-                  confint(ATE_mod)[2,])
+  return(list(ATE = iv_mod$coefficients['A'], # point estimate
+              CI = confint(iv_mod)['A',])) # confidence interval
   
-  return(results)
 }
 
 # --------------------------------------------------------
-#               Multiple imputation
+#               MULTIPLE IMPUTATION
 # --------------------------------------------------------
 
-mime <- function(data,m=20) {
+ate_mime <- function(data, m = 50, method = "aipw") {
+  
   #' Performs multiple imputation for ME correction, following Webb-Vargas et 
   #' al. (2015) with the one modification that we assume there is an internal,
   #' not external, validation sample. Makes use of the 'mice' package to perform
   #' multiple imputations
-  #' 
   
   # Turn into missing data problem explicitly by recasting the unobserved X
   # values as missing so that we can use mice
-  data_imp <- data %>% mutate(X = replace(X,v_idx==0,NA)) %>%
-                       select(-v_idx)
+  data_imp <- data %>% mutate(W = replace(W, val.idx == 0, NA)) %>% dplyr::select(-val.idx)
   
   # Run the (congenial) MI procedure
-  imps <- mice(data_imp,method='norm.boot',m=m)
+  invisible(capture.output(imps <- mice(data_imp, method = 'norm.boot', m = m)))
   
   # Loop through imputed datasets, estimate PS 
-  vals <- sapply(1:m, function(d, imps, ...) {
+  vals <- sapply(1:m, function(d, imps, method) {
     
     # fit propensity score model with d-th dataset
-    curr_data <- complete(imps,d)
-    ps_hat <- predict(glm(A ~ X + Z,family='binomial',data=curr_data),
-                      type='response')
-    w_hat <- ifelse(curr_data$A==1,
-                    1/ps_hat,
-                    1/(1-ps_hat))
-    
+    curr_data <- complete(imps, d)
     
     # Record ATE estimate and its SE
-    ATE <- lm(Y ~ A, data=curr_data,weights=w_hat)
-    beta <- ATE$coefficients[2] 
-    se <- sqrt(diag(vcov(ATE))[2]) 
+    if (method == "ipw")
+      mime_mod <- with(curr_data, ipw(a = A, y = Y, x = data.frame(W, X)))
+    else if (method == "aipw")
+      mime_mod <- with(curr_data, aipw(a = A, y = Y, x = data.frame(W, X)))
     
-    return(c(beta = beta, se = se))
+    est <- mime_mod$ATE
+    var <- mime_mod$VAR
     
-  }, imps = imps)
+    return(c(est = est, var = var))
+    
+  }, imps = imps, method = method)
   
   # grab ests and their SEs
-  betas <- vals[1,]
-  ses <- vals[2,]
+  ests <- vals[1,]
+  vars <- vals[2,]
   
   # compute SE est 
-  ovr_mean <- mean(betas) 
-  bw_var   <- sum( (betas - ovr_mean)^2 )/(length(betas)-1) # var bw ests
-  wi_var   <- mean(ses) # within variance
-  SE_est <- wi_var + ((1 + (1/length(betas))) * bw_var )
-  CI <- c(-qnorm(.975)*SE_est + ovr_mean,
-          qnorm(.975)*SE_est + ovr_mean)
+  ATE_hat <- mean(ests) 
+  bw_var <- sum((ests - ATE_hat)^2)/(length(ests)-1) # var bw ests
+  wi_var <- mean(vars) # within variance
+  Vhat <- wi_var + ((1 + (1/length(ests))) * bw_var)
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + ATE_hat, qnorm(.975)*sqrt(Vhat) + ATE_hat)
   
-  return(list(ATE=ovr_mean,
-              CI=CI))
+  return(list(ATE = ATE_hat, CI = CI_hat))
   
 }
  

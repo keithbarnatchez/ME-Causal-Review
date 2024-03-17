@@ -1,4 +1,3 @@
-
 ### Replicate Measurements
 
 # s = replicate of mismeasured variable a
@@ -131,7 +130,7 @@ multi_blp <- function(s, s.id, x = NULL, x.id = NULL) {
       stop("id provided does not match unique values of s.id")
     
   }
-
+  
   # dimensions
   m <- length(z.id)
   n <- length(id)
@@ -147,7 +146,7 @@ multi_blp <- function(s, s.id, x = NULL, x.id = NULL) {
     
     mu_z <- colSums(wts*z)/m
     mu_x <- colMeans(x)
-
+    
     mat_z <- matrix(rep(mu_z, n), nrow = n, byrow = TRUE)
     mat_x <- matrix(rep(mu_x, n), nrow = n, byrow = TRUE)
     nu <- m - sum(wts^2)/m
@@ -195,31 +194,5 @@ multi_blp <- function(s, s.id, x = NULL, x.id = NULL) {
   
   colnames(a) <- colnames(z)
   return(data.frame(id = id, a))
-  
-}
-
-## Validation Data
-
-# a = gold standard ("true" exposure); length(a) == length(z)if missing include as NA
-# z = mismeasured exposure
-# x = covariate data
-
-pred <- function(a, z, x, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction", "SL.glmnet", "SL.ranger", "SL.earth")){
-  
-  if(length(a) != length(z))
-    stop("length(a) != length(z); fill in missing values with NA.")
-  
-  # set up evaluation points & matrices for predictions
-  xz <- data.frame(x, z)
-  xz.tmp <- data.frame(xz[!is.na(a),])
-  a.tmp <- a[!is.na(a)]
-  colnames(xz.tmp) <- colnames(xz) <- c(colnames(x), "z")
-  
-  # estimate nuisance outcome model with SuperLearner
-  mumod <- SuperLearner(Y = a.tmp, X = xz.tmp, SL.library = sl.lib)
-  a_ <- c(predict(mumod, newdata = xz)$pred)
-  a_[!is.na(a)] <- a[!is.na(a)]
-  
-  return(a_)
   
 }

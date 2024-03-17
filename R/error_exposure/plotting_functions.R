@@ -1,12 +1,10 @@
 set_plot_theme <- function() {
-  
   # theme_set(theme_bw() +
   #             theme(plot.title = element_text(hjust = 0, size = 16),
   #                   plot.subtitle = element_text(hjust = 0, size = 12),
   #                   axis.title = element_text(size = 12),
   #                   strip.text = element_text(size = 12),
   #                   legend.position = "bottom"))
-  
   ggplot2::theme_set(
     ggplot2::theme_minimal() +
       ggplot2::theme(
@@ -26,25 +24,22 @@ set_plot_theme <- function() {
         )
       )
   )
-  
 }
 
 label_handler <- function(var) {
-  
   # x vars
-  if (var=='sig_u') return('Error variance')
-  if (var=='ba') return('True ATE')
-  if (var=='n') return('Sample Size')
-  if (var=='bin') return('Binary Outcome')
+  if (var=='u') return('Error variance')
+  if (var=='a') return('True ATE')
+  if (var=='n') return('Sample size')
+  if (var=='b') return('Binary outcome')
   if (var=='rho') return('Corr(X,Z)')
   if (var=='psi') return('Corr(X,V)')
-  if (var=='aw') return('Effect of EP Confounder on Treatment')
+  if (var=='ax') return('ax')
   
   # y vars
   if (var=='bias') return('Percent bias')
   if (var=='mse') return('MSE')
   if (var=='ci_cov') return('95% CI coverage rate')
-  
 }
 
 title_handler <- function(g) {
@@ -52,12 +47,11 @@ title_handler <- function(g) {
 }
 
 line_plot <- function(op_chars,xvar,yvar,
-                      fixed_vars=c('sig_u','ba','n','bin','rho','psi','aw'),
+                      fixed_vars=c('u','a','n','b','rho','psi','ax'),
                       fixed_defaults=NULL, # c(0.3,1,500,0,0.5,0.05,0.25),
                       drop_methods=NULL,
                       extra_options=NULL,
                       save=FALSE) {
-  
   #' Function for generating plots of operating characteristics
   #'
   #' INPUTS:
@@ -91,7 +85,7 @@ line_plot <- function(op_chars,xvar,yvar,
   
   # specify defaults to be first row of op_chars if defaults are not provided
   if (is.null(fixed_defaults)) { 
-    tempdf <- op_chars %>% select('sig_u','ba','n','bin','rho','psi','aw') %>%
+    tempdf <- op_chars %>% select('u','a','n','b','rho','psi','ax') %>%
       unique() 
     fixed_defaults <- tempdf[1,]
   }
@@ -108,20 +102,18 @@ line_plot <- function(op_chars,xvar,yvar,
   
   # Fix values at defaults via filtering
   for (i in 1:length(fixed_vars)) { # loop over the variables being kept fixed
-  
+    
     # Assert that the default values are actually used  in the simulation.
     # If not, throw an error message so the user can fix it
     # <...> !( fixed_defaults[i] %in% op_chars[fixed_vars[i]] )
     if ( !(  any(as.double(fixed_defaults[i]) == op_chars[fixed_vars[i]])   )  ) {
       stop(paste('Error: fixed val selected for',fixed_vars[i],'is not in operating characteristics dataframe. select a default that is in the dataframe'  ))
     }
-    
     # Filter to only keep rows with default value of current var
     op_chars <- op_chars %>% filter( eval(as.name(fixed_vars[i])) == as.double(fixed_defaults[i]) )
     
     # Construct the figure subtitle
-    comma <- ', '
-    
+    comma<-', '
     if (i==length(fixed_vars)) {comma<-''}
     if (i==1) {
       subt <- paste(var_labs[i],': ', fixed_defaults[i],comma,sep='')
@@ -133,22 +125,22 @@ line_plot <- function(op_chars,xvar,yvar,
   
   # Make the title
   plt_title <- paste(label_handler(yvar),'of ME correction methods')
-
+  
   # Make the plot
   op_chars %>% ggplot(aes(x=eval(as.name(xvar)),
                           y=eval(as.name(yvar)),
                           color=method)) + 
-               geom_line(size=0.75) + geom_point(size=2) +
-               labs(x=label_handler(xvar),
-                    y=label_handler(yvar),
-                    title=plt_title,
-                    caption=subt,
-                    subtitle=paste('Varying',label_handler(xvar)),
-                    color='Method')
+    geom_line(size=0.75) + geom_point(size=2) +
+    labs(x=label_handler(xvar),
+         y=label_handler(yvar),
+         title=plt_title,
+         caption=subt,
+         subtitle=paste('Varying',label_handler(xvar)),
+         color='Method')
   
   # Want to save to current figure 
   # first make the filename (format xvar_yvar_)
-  nm_str <- paste(xvar,'_',yvar,sep='')
+  nm_str <- paste(xvar, '_', yvar, sep = '')
   
   for (i in 1:length(fixed_vars)) {
     nm_str <- paste(nm_str,'_',fixed_vars[i],fixed_defaults[i],sep='')
@@ -156,7 +148,6 @@ line_plot <- function(op_chars,xvar,yvar,
   
   nm_str <- paste(gsub('.','',nm_str,fixed=T), '.pdf', sep='')
   fullpath <- paste('../../output/figures/', nm_str, sep='')
-  ggsave(fullpath, height = 6, width = 9, units = 'in')
+  ggsave(fullpath,height = 6, width = 9, units = 'in')
   
 }
-
