@@ -44,43 +44,42 @@ csme_implement <- function(data) {
   
   # not confident about the denominator to this estimator
   condexp <- function(X, alpha, beta, delta, sig2_u, sig2_e) {
-    (X %*% alpha + delta*(X %*% beta)) /
-      (1 + (X %*% beta)^2*c(sig2_u / sig2_e))
+    (c(X %*% alpha) + delta*c(X %*% beta)) /
+      (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
   }
   
   condvar <- function(X, beta, sig2_u, sig2_e) {
-    sig2_e / (1 + (X %*% beta)^2*c(sig2_u / sig2_e))
+    sig2_e / (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
   }
   
   function(theta, sig2_u, a0, a1){
     
     # model parameters
-    gamma <- theta[2:(p + 1)]
-    alpha <- theta[(p + 2):(2*p + 1)]
-    beta <- theta[(2*p + 2):(3*p + 1)]
-    sig2_e <- theta[(3*p + 2)]
-    eta <- theta[(3*p + 3)]
+    gamma <- theta[1:p]
+    alpha <- theta[(p + 1):(2*p)]
+    beta <- theta[(2*p + 1):(3*p)]
+    sig2_e <- theta[(3*p + 1)]
+    eta <- theta[(3*p + 2)]
     
     # gps model uncertainty (questionable whether this is sufficient?)
-    gps_num_eqn <- A.star - theta[1]
-    gps_denom_eqn <- crossprod(X, A.star - c(X %*% gamma))
+    gps_eqn <- crossprod(X, A.star - c(X %*% gamma))
     
     # conditional score statistics
-    delta <- A.star + (sig2_u/sig2_e)*Y*c(X %*% beta)
+    delta <- A.star + c(sig2_u/sig2_e)*Y*c(X %*% beta)
     m_A <- condexp(X = X, alpha = alpha, beta = beta, 
                    delta = delta, sig2_u = sig2_u, sig2_e = sig2_e)
     v_A <- condvar(X = X, beta = beta, sig2_u = sig2_u, sig2_e = sig2_e)
+    scl <- (Y - m_A)^2 / v_A
     
     # outcome model estimating equations
     ols_eqn1 <- crossprod(X, ipw_hat*(Y - m_A))
     ols_eqn2 <- crossprod(delta*X, ipw_hat*(Y - m_A))
-    scl <- (Y - m_A)^2 / v_A
-    disp_eqn <- crossprod(ipw_hat, (sig2_e - sig2_e*scl))
+    disp_eqn <- crossprod(ipw_hat, sig2_e - sig2_e*scl)
     
     # prediction estimating equation
-    pred_eqn <- (a1 - a0) * c(X %*% beta) - eta
+    pred_eqn <- t(rep(a1 - a0, n)) %*% c(X %*% beta) - eta
     
-    c(gps_num_eqn, gps_denom_eqn, ols_eqn1, ols_eqn2, disp_eqn, pred_eqn)   
+    c(gps_eqn, ols_eqn1, ols_eqn2, disp_eqn, pred_eqn)   
     
   }
   
@@ -111,7 +110,7 @@ erf_csme <- function(data) {
   # initial predictions
   outmod <- lm(Y ~ A.star*X + A.star*W, data = data)
   ipwmod <- lm(Y ~ A.star, weights = ipw_hat, data = data)
-  start <- unname(c(mean(data$A.star), coef(denom_mod), coef(outmod), sigma(outmod)^2, coef(ipwmod)[2]))
+  start <- unname(c(coef(denom_mod), coef(outmod), sigma(outmod)^2, coef(ipwmod)[2]))
   
   results_csme <- m_estimate(estFUN = csme_implement, data = mdat,
                              inner_args = list(sig2_u = (sig_u_hat)^2, a0 = 0, a1 = 1),

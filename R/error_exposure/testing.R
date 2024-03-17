@@ -20,7 +20,7 @@ source('~/Github/ME-Causal-Review/R/ERF.R')
 #-------------------------------------------------
 
 # Generate the data
-data <- generate_data(n = 1000, sig_u = 0.5, binary = FALSE, ba = 1) 
+data <- generate_data(n = 2000, sig_u = 0.5, binary = FALSE, ba = 1) 
 
 # Get IPW from different approaches
 ideal <- erf_ideal(data)
