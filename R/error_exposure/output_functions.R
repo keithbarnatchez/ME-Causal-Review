@@ -197,7 +197,7 @@ get_results <- function(methods,
     
     # Compute avg operating characteristics from stats of interest 
     final_stats <- sim_stats %>% group_by(method) %>%
-      summarize(bias = 100*mean(bias/a, na.rm = T),
+      summarize(bias = 100*mean(bias/ba, na.rm = T),
                 mse = mean(bias^2, na.rm = T),
                 est = mean(est, na.rm = T),
                 ci_cov = 100*mean(ci_cov, na.rm = T),
