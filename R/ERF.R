@@ -3,7 +3,6 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
                 sl.lib = c("SL.mean", "SL.glm")) {	
   
   n <- length(a)
-  weights <- rep(1, times = n) # placeholder until we can incorporate this
   a.vals <- seq(min(a), max(a), length.out = 100)  # placeholder until we can incorporate this
   
   wrap <- sl_est(y = y, a = a, x = x, a.vals = a.vals, 
@@ -13,37 +12,25 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
   int.mat <- wrap$int.mat
   
   # asymptotics
-  out <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, weights = weights, 
-            se.fit = TRUE, a.vals = a.vals, int.mat = int.mat)
+  results <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, se.fit = TRUE, 
+                      a.vals = a.vals, int.mat = int.mat)
   
-  estimate <- out[1]
-  variance <- out[2]
+  Mhat <- results[1]
+  Vhat <- results[2]
   
-  # bootstrap
-  # boot.idx <- cbind(1:n, replicate(200, sample(x = n, size = n, replace = TRUE)))
-  # 
-  # out <- apply(boot.idx, 2, function(idx, ...) {
-  #   
-  #   sapply(a.vals, kern_est, psi = psi[idx], a = a[idx], 
-  #          weights = weights[idx], bw = bw, se.fit = FALSE)
-  #   
-  # })
-  # 
-  # estimate <- out[,1]
-  # variance <- apply(out[,2:ncol(out)], 1, var)
+  # Rely on asymptotics for CI construction
+  lower_ci <- Mhat - sqrt(Vhat)*qnorm(0.975)
+  upper_ci <- Mhat + sqrt(Vhat)*qnorm(0.975)
   
-  out <- list(estimate = estimate, variance = variance)	
+  return(list(EST = Mhat, CI = c(lower_ci, upper_ci), VAR = Vhat))
   
   return(out)
   
 }
 
 
-# estimate glm outcome model (Keith - adapt code to fit a Poisson outcome as an excercise)
+# estimate glm outcome model
 sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "SL.glm"), ...) {
-  
-  if (is.null(weights))
-    weights <- rep(1, nrow(x))
   
   # set up evaluation points & matrices for predictions
   n <- nrow(x)
@@ -97,17 +84,12 @@ sl_est <- function(a, y, x, a.vals, family = gaussian(), sl.lib = c("SL.mean", "
 }
 
 # Kernel weighted least squares
-contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
+contrast <- function(a0, a1, a, psi, bw = 1, se.fit = FALSE, a.vals = NULL, int.mat = NULL) {
   
   n <- length(a)
   
-  if (is.null(weights))
-    weights <- rep(1, times = n)
-  
   # Regression
-  g.std <- cbind(1, a)
-  
-  mod <- lm(psi ~ a, weights = weights)
+  mod <- lm(psi ~ a)
   mu <- (a1 - a0)*mod$coefficients[2]
   
   if (se.fit & !is.null(int.mat) & !is.null(a.vals)) {
@@ -115,19 +97,21 @@ contrast <- function(a0, a1, a, psi, bw = 1, weights = NULL, se.fit = FALSE, a.v
     eta <- mod$fitted.values
     
     # Gaussian Kernel Matrix
-    g.vals <- matrix(rep(a.vals, n), byrow = T, nrow = n)
+    g.std <- cbind(1, a)
+    g.vals <- matrix(rep(a.vals, n), byrow = TRUE, nrow = n)
     intfn1.mat <- int.mat
     intfn2.mat <- g.vals * int.mat
     
-    int1 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), byrow = T, nrow = n)*
+    int1 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), 
+                           byrow = T, nrow = n)*
                       (intfn1.mat[,-1] + intfn1.mat[,-length(a.vals)])/2)
-    int2 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), byrow = T, nrow = n)*
+    int2 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n),
+                           byrow = T, nrow = n)*
                       (intfn2.mat[,-1] + intfn2.mat[,-length(a.vals)])/2)
     
-    U <- solve(crossprod(g.std, weights*g.std))
-    V <- cbind(weights*((psi - eta) + int1),
-               weights*(a * (psi - eta) + int2))
-    sig2 <- t(c(0, a1 - a0)) %*%U %*% crossprod(V) %*% U %*% c(0, a1 - a0)
+    U <- solve(crossprod(g.std))
+    V <- cbind((psi - eta) + int1, a * (psi - eta) + int2)
+    sig2 <- t(c(0, a1 - a0)) %*% U %*% crossprod(V) %*% U %*% c(0, a1 - a0)
     
     return(c(mu = mu, sig2 = sig2))
     

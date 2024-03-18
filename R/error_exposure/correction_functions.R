@@ -1,163 +1,208 @@
-ideal_method <- function(Y,A,X1,X2,
-                         sl.lib,
-                         outcome_family=gaussian()) {
-  #' Estimates ATE in ideal scenario: with full access to true values of the
-  #' exposure A
-  #'
+# ------------------------------------------------------------------------------
+# CAUSAL ME CORRECTION FUNCTIONS - EXPOSURE
+# ------------------------------------------------------------------------------
+# This file contains functions for implementing the following ME correction
+# methods: 1) Conditional Scoring, 2) Regression Calibration,
+# 3) SIMEX, 4) IV, 5) MIME (Webb-Vargas, 2015)
 
-  X <- cbind(1,X1,X2)
+# --------------------------------------------------------
+#            NAIVE AND IDEAL APPROACH
+# --------------------------------------------------------
+
+erf_ideal <- function(data) {
+  
+  # Use erf() function to estimate contrast
+  results <- with(data, erf(y = Y, a = A, x = data.frame(W, X), a1 = 1, a0 = 0))
+  return(results)
+  
+}
+
+erf_naive <- function(data, sl.lib, family = gaussian()) {
+  
+  #' Naively estimates ERF contrast, using mismeasured W in place of true measurements
   
   # Use erf() function to est ATE
-  res <- erf(y = Y, a1 = 1, a0 = 0, a = A, x = X[,-1],
-  family = outcome_family, sl.lib = sl.lib)
+  results <- with(data, erf(y = Y, a = A.star, x = data.frame(W, X), a1 = 1, a0 = 0,))
+  return(results)
   
-  return(list(
-    estimate=res$estimate,
-    CI=c(res$estimate - 1.96*sqrt(res$variance),res$estimate + 1.96*sqrt(res$variance)),
-    se=sqrt(res$variance)
-  ))
 }
 
-naive_method <- function(Y,A.star,X1,X2,
-                         sl.lib,
-                         outcome_family=gaussian()) {
-  #' Naively estimates ATE, using mismeasured A.star in place of true measurements
-  #' A
-  #'
+# ---------------------------------------------------------
+#                CONDITIONAL SCORE METHOD
+# ---------------------------------------------------------
+
+csme_implement <- function(data) {
   
-  X <- cbind(1,X1,X2)
+  Y <- data$Y
+  A.star <- data$A.star
+  ipw_hat <- data$ipw_hat
+  X <- as.matrix(data %>% select(-c(A.star, Y, ipw_hat)))
   
-  # Use erf() function to est ATE
-  res <- erf(y = Y, a1 = 1, a0 = 0, a = A.star, x = X[,-1],
-             family = outcome_family, sl.lib = sl.lib)
+  #data dimensions
+  n <- nrow(X)
+  p <- ncol(X)
   
-  return(list(
-    estimate=res$estimate,
-    CI=c(res$estimate - 1.96*sqrt(res$variance),res$estimate + 1.96*sqrt(res$variance)),
-    se=sqrt(res$variance)
-  ))
+  # not confident about the denominator to this estimator
+  condexp <- function(X, alpha, beta, delta, sig2_u, sig2_e) {
+    (c(X %*% alpha) + delta*c(X %*% beta)) /
+      (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
+  }
+  
+  condvar <- function(X, beta, sig2_u, sig2_e) {
+    sig2_e / (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
+  }
+  
+  function(theta, sig2_u, a0, a1){
+    
+    # model parameters
+    gamma <- theta[1:p]
+    alpha <- theta[(p + 1):(2*p)]
+    beta <- theta[(2*p + 1):(3*p)]
+    sig2_e <- theta[(3*p + 1)]
+    eta <- theta[(3*p + 2)]
+    
+    # gps model uncertainty (questionable whether this is sufficient?)
+    gps_eqn <- crossprod(X, A.star - c(X %*% gamma))
+    
+    # conditional score statistics
+    delta <- A.star + c(sig2_u/sig2_e)*Y*c(X %*% beta)
+    m_A <- condexp(X = X, alpha = alpha, beta = beta, 
+                   delta = delta, sig2_u = sig2_u, sig2_e = sig2_e)
+    v_A <- condvar(X = X, beta = beta, sig2_u = sig2_u, sig2_e = sig2_e)
+    scl <- (Y - m_A)^2 / v_A
+    
+    # outcome model estimating equations
+    ols_eqn1 <- crossprod(X, ipw_hat*(Y - m_A))
+    ols_eqn2 <- crossprod(delta*X, ipw_hat*(Y - m_A))
+    disp_eqn <- crossprod(ipw_hat, sig2_e - sig2_e*scl)
+    
+    # prediction estimating equation
+    pred_eqn <- t(rep(a1 - a0, n)) %*% c(X %*% beta) - eta
+    
+    c(gps_eqn, ols_eqn1, ols_eqn2, disp_eqn, pred_eqn)   
+    
+  }
+  
 }
 
-
-rcal <- function(Y,A,X1,X2,A.star,v_idx,sl.lib) {
-  #' Regression calibration
-  #' 
-  #' INPUTS: 
-  #' - Y, A, X1, X2, A.star: covariates from gen_data()
-  #' - v_idx: Indicator for validation data subset
-  #' - sl.lib: SuperLearner libraries
-  #' 
-  #' OUPUTS:
-  #' - A list containing rcal ATE estimate, SE and CI
+erf_csme <- function(data) {
   
-  # Validation data
-  A.sub <- A ; A.sub[v_idx==0] <- NA
-  
-  # Covariates
-  X <- cbind(1, X1, X2)
-  
-  # Cal model
-  A.tilde <- pred(a = A.sub, z = A.star, x = X[,-1], sl.lib = sl.lib)
-  results_rc <- erf(y = Y, a1 = 1, a0 = 0, a = A.tilde, x = X[,-1],
-                    family = gaussian(), sl.lib = sl.lib)
-  
-  # bias <- results_rc$estimate - true_effect
-  se_rc <- sqrt(results_rc$variance)
-  # coverage_rc <- (results_rc$estimate - 1.96*se_rc) < true_effect &
-  #   (results_rc$estimate + 1.96*se_rc) > true_effect
-  
-  res <- list(estimate=results_rc$estimate,
-              CI=c(results_rc$estimate - 1.96*se_rc, results_rc$estimate + 1.96*se_rc),
-              se=se_rc
-  )
-  return(res)
-}
-
-csme_linear <- function(Y,A,X1,X2,A.star,
-                        sig2_me,
-                        init_guess=1,
-                        guess_acc=0.25) {
   #' Function for implementing a modified version of the Blette (2022) CSME
   #' approach
   #'
   #' INPUTS:
-  #' - Y,A,X1,X2,A.star: Simulation vars from gen_data()
-  #' - true_effect: True ATE (needed for setting initial guess)
-  #' - guess_acc: SD of initial guess for m-estimation
+  #' - data: Simulation vars from gen_data()
+  sig_u_hat <- with(data, sd(A.star[which(val.idx == 1)] - A[which(val.idx == 1)]))
   
-  ## Conditional Score Measurement Error
-  X <- cbind(1,X1,X2)
+  # fit GPS model/get weights
+  denom_mod <- lm(A.star ~ W + X, data = data)
+  p_denom <- predict(denom_mod, type = 'response')
+  dens_denom <- dnorm(data$A.star, p_denom, sigma(denom_mod))
+  num_mod <- lm(A.star ~ 1, data = data)
+  p_num <- predict(num_mod, type = 'response')
+  dens_num <- dnorm(data$A.star, p_num, sigma(denom_mod))
+  data$ipw_hat <- dens_num / dens_denom
   
-  # Initial guess for causal effect (good but variable intuition)
-  guess <- init_guess + rnorm(1, 0, 0.1)
-
-  # Fit regression to use for starting values
-  mod <- lm(Y ~ 0 + X + X:A.star)
+  # set up data frame for m_estimate
+  mdat <- with(data, data.frame("Y" = Y, "A.star" = A.star, 
+                                "ipw_hat" = ipw_hat, "X" = cbind(1, W, X)))
   
-  # Fit GPS model/get weights
-  denom_mod <- lm(A.star ~ 0 + X)
-  p_denom <- predict(denom_mod, type='response')
-  dens_denom <- dnorm(A.star, p_denom, summary(denom_mod)$sigma)
-  num_mod <- lm(A.star ~ 1)
-  p_num <- predict(num_mod, type='response')
-  dens_num <- dnorm(A.star, p_num, summary(denom_mod)$sigma)
-  wts <- dens_num / dens_denom
+  # initial predictions
+  outmod <- lm(Y ~ A.star*X + A.star*W, data = data)
+  ipwmod <- lm(Y ~ A.star, weights = ipw_hat, data = data)
+  start <- unname(c(coef(denom_mod), coef(outmod), sigma(outmod)^2, coef(ipwmod)[2]))
   
-  # Fit weighted regression for starting values
-  wmod <- lm(Y ~ A.star, weights = wts)
-  
-  # Set up data frame for m_estimate
-  data <- data.frame("Y" = Y, "A.star" = A.star, "wts" = wts, "X" = X)
-  
-  startvec <- unname(c(mean(A.star), coef(denom_mod), coef(mod), sigma(mod)^2, coef(wmod)[2]))
-  results_csme <- m_estimate(estFUN = csme_aipw, data = data,
-                             inner_args = list(tau2 = sig2_me, a0 = 0, a1 = 1),
-                             root_control = setup_root_control(start = startvec))
+  results_csme <- m_estimate(estFUN = csme_implement, data = mdat,
+                             inner_args = list(sig2_u = (sig_u_hat)^2, a0 = 0, a1 = 1),
+                             root_control = setup_root_control(start = start))
   
   idx <- length(results_csme@estimates)
   
-  # Get results of interest
-  # bias_csme <- coef(results_csme)[idx] - true_effect
-  se_csme <- sqrt(vcov(results_csme)[idx, idx])
-  # coverage_csme <- (coef(results_csme)[idx] - 1.96*se_csme) < true_effect &
-    # (coef(results_csme)[idx] + 1.96*se_csme) > true_effect
-  CI <- c(coef(results_csme)[idx] - 1.96*se_csme, coef(results_csme)[idx] + 1.96*se_csme)
+  # get results of interest
+  Mhat <- coef(results_csme)[idx]
+  Vhat <- vcov(results_csme)[idx, idx]
   
-  return(list(
-    estimate=coef(results_csme)[idx],
-    CI=CI
-  ))
+  CI_hat <- c(Mhat - 1.96*sqrt(Vhat), Mhat + 1.96*sqrt(Vhat))
+  
+  return(list(EST = Mhat, CI = CI_hat))
   
 }
 
-simex_direct <- function(z, y, x, a0, a1, family = gaussian(),
-                  n.boot = 50, degree = 2, mc.cores = 3,
-                  tau2, lambda = seq(0.1, 2.1, by = 0.25)) {
-  #' Direct simex correction
-  #' z = mismeasured exposure
-  #' x = covariate data
-  #' a1 - a0 = points to be contrasted
-  #' degree = polynomial function to extrapolate
-  #' mc.cores = faster SIMEX with multicore processing?
-  #' n.boot = number of bootstrap resamples
-  #' tau2 = estimated measurement error variance
+# ---------------------------------------------------------
+#                REGRESSION CALIBRATION
+# ---------------------------------------------------------
+
+erf_rc <- function(data, nboot = 100) {
   
-  l.vals <- lapply(lambda, function(lam, z, y, x, a0, a1, sl.lib, ...){
+  #' Regression calibration
+  #' 
+  #' INPUTS: 
+  #' - data from gen_data()
+  #' 
+  #' OUPUTS:
+  #' - A list containing rcal EST and CI
+  
+  val_data <- data[which(data$val.idx == 1),]
+  
+  # fit calibration model
+  A.hat <- predict(lm(A ~ A.star + W + X, data = val_data), newdata = data)
+  
+  # fit model with calibrated exposures
+  rc_mod <- with(data, erf(a = A.hat, y = Y, x = data.frame(W, X), a1 = 1, a0 = 0))
+  
+  Mhat <- rc_mod$EST
+  boot <- rep(NA, nboot)
+  
+  for (b in 1:nboot) {
+    
+    boot_idx <- sample(1:nrow(data), size = nrow(data), replace = TRUE)
+    boot_data <- data[boot_idx,]
+    val_data <- data[which(boot_data$val.idx == 1),]
+    boot_data$A.tilde <- predict(lm(A ~ A.star + W + X, data = val_data), newdata = boot_data)
+    
+    boot_mod <- with(boot_data, erf(a = A.tilde, y = Y, x = data.frame(W, X), a1 = 1, a0 = 0))
+    boot[b] <- boot_mod$EST
+    
+  }
+  
+  # bootstrap to obtain confidence interval
+  CI_hat <- quantile(boot, probs = c(0.025, 0.975))
+  
+  return(list(EST = Mhat, CI = CI_hat))
+  
+}
+
+# ---------------------------------------------------------
+#                          SIMEX
+# ---------------------------------------------------------
+
+erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
+  
+  sig_u_hat <- with(data, sd(A.star[which(val.idx == 1)] - A[which(val.idx == 1)]))
+  
+  l.vals <- lapply(lambda, function(lam, data, sig_u, nboot){
     
     # simulate nboot 
     z.mat <- replicate(n.boot, z + sqrt(lam)*rnorm(length(z), 0, sqrt(tau2)))
     
-    vals <- apply(z.mat, 2, erf, y = y, a1 = a1, a0 = a0,
-                  x = x, family = gaussian(), sl.lib = sl.lib)
+    vals <- apply(A.mat, 2, function(A.tmp, Y, W, Z) {
+      
+      # Estimate ERF
+      results <- erf(a = A.tmp, y = Y, x = data.frame(W, Z), a0 = 0, a1 = 1)
+      Mhat <- results$EST
+      Vhat <- results$VAR
+      
+      return(c(EST = Mhat, VAR = Vhat))
+      
+    }, W = data$W, Z = data$X, Y = data$Y)
     
-    mu.vals <- do.call(c, lapply(vals, function(o) o$estimate))
-    sig.vals <- do.call(c, lapply(vals, function(o) o$variance))
-   
+    mu.vals <- vals[1,] 
+    sig.vals <- vals[2,]
     
     s.hat <- var(mu.vals)
     sig.hat <- mean(sig.vals)
     
-    return(list(estimate = mean(mu.vals), variance = sig.hat - s.hat))
+    return(list(est = mean(mu.vals), var = sig.hat - s.hat))
     
   }, z = z, y = y, x = x, a0 = a0, a1 = a1, sl.lib = sl.lib)
   
@@ -194,25 +239,14 @@ iv_interaction <- function(Y,A,X1,X2,A.star,Z) {
   #' Given input data/valid instrument Z from gen_data(), outputs the results
   #' of a 2SLS estimation of the assumed DGP model
   #' 
-  #' Uses the ivreg package
+  #'
   #'
   
-  # Construct instruments for interaction terms
-  ZX1 <- Z*X1 ; ZX2 <- Z*X2 
+  # Fit first stage
+  Ahat <- lm(A.star ~ X1 + X2 + Z)
   
-  # Construct interaction terms
-  AX1 <- A.star*X1 ; AX2 <- A.star*X2 ; X1X2 <- X1*X2
+  # Second stage
   
-  # Fit (endogenous | exogenous | instruments)
-  res <- ivreg::ivreg(Y ~ X1 + X2 + X1X2 | A.star + AX1 + AX2 | Z + ZX1 + ZX2)
-  
-  # Get ATE estimate 
-  est <- res$coefficients['A.star'] + res$coefficients['AX1']*mean(X1) +
-    res$coefficients['AX2']*mean(X2) 
-  
-  # Variance est (pretty sure this is wrong)
-  sig2a <- vcov(est)['A.star','A.star'] ; sig2ax1 < vcov(est)['AX1','AX2']
-  sig2ax2 < vcov(est)['AX1','AX2']
   
   
 
