@@ -33,7 +33,7 @@ simex <- ate_simex(data, method = "aipw")
 # Test the get_results() function
 # ------------------------------------------------
 
-methods <- c('psc') 
+methods <- c('psc','rc','iv','simex','mime') 
 sig_u_grid <- c(0.1,0.3,0.5,0.9) 
 aw_grid = c(0.5)
 ba_grid <- c(1)

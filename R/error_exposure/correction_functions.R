@@ -182,8 +182,7 @@ erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
   
   l.vals <- lapply(lambda, function(lam, data, sig_u, nboot){
     
-    # simulate nboot 
-    z.mat <- replicate(n.boot, z + sqrt(lam)*rnorm(length(z), 0, sqrt(tau2)))
+    A.mat <- replicate(nboot, data$A.star + sqrt(lam)*rnorm(nrow(data), 0, sig_u))
     
     vals <- apply(A.mat, 2, function(A.tmp, Y, W, Z) {
       
@@ -204,52 +203,89 @@ erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
     
     return(list(est = mean(mu.vals), var = sig.hat - s.hat))
     
-  }, z = z, y = y, x = x, a0 = a0, a1 = a1, sl.lib = sl.lib)
+  }, data = data, nboot = nboot, sig_u = sig_u_hat)
   
-  if (any(lambda == 0)){
-    
-    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))[,-which(lambda == 0)]
-    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))[,-which(lambda == 0)]
-    
-  } else {
-    
-    Psi <- do.call(c, lapply(l.vals, function(o) o$estimate))
-    Phi <- do.call(c, lapply(l.vals, function(o) o$variance))
-    
-  }
+  Psi <- do.call(c, lapply(l.vals, function(o) o$est))
+  Phi <- do.call(c, lapply(l.vals, function(o) o$var))
   
-  # Extrapolation step
-  L <- cbind(1, poly(lambda, degree = degree, raw = TRUE))
-  chi <- c(1, poly(-1, degree = degree, raw = TRUE))
-  estimate <- c(t(chi) %*% solve(t(L) %*% L) %*% t(L) %*% Psi)
-  variance <- c(t(chi) %*% solve(t(L) %*% L) %*% t(L) %*% Phi)
-  se_simex <- sqrt(variance)
-
-  # Compile results into list and return the list
-  out <- list(estimate = estimate, 
-              CI = c(estimate - 1.96*se_simex,
-                     estimate + 1.96*se_simex),
-              variance = variance, 
-              Psi = Psi, Phi = Phi, lambda = lambda)
-  return(out)
-
+  Mhat <- c(predict(mgcv::gam(Psi ~ s(lambda, k = k), data = data.frame(Psi = Psi, lambda = lambda)), 
+                  newdata = data.frame(lambda = -1)))
+  Vhat <- c(predict(mgcv::gam(Phi ~ s(lambda, k = k), data = data.frame(Phi = Phi, lambda = lambda)), 
+                  newdata = data.frame(lambda = -1)))
+  
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + Mhat, qnorm(.975)*sqrt(Vhat) + Mhat)
+  
+  return(list(EST = Mhat, CI = CI_hat))
+  
 }
 
-iv_interaction <- function(Y,A,X1,X2,A.star,Z) {
-  #' Given input data/valid instrument Z from gen_data(), outputs the results
-  #' of a 2SLS estimation of the assumed DGP model
+# --------------------------------------------------------
+#                 INSTRUMENTAL VARIABLES
+# --------------------------------------------------------
+
+erf_iv <- function(data) {
+  
+  #' Implements instrumental variables correction 
+  #'
+  #' INPUTS: 
+  #' - data: A dataframe created with the generate_data() function
   #' 
-  #'
-  #'
+  #' OUTPUTS:
+  #' - A list containing the ATE estimate and confidence interval
+  #' 
+  #' REQUIRED PACKAGES:
+  #' - AER
   
-  # Fit first stage
-  Ahat <- lm(A.star ~ X1 + X2 + Z)
+  # Fit the IV model (first and second stage) with AER package
+  iv_mod <- ivreg(Y ~ X + W + A.star | V + X + W, data=data)
   
-  # Second stage
+  return(list(EST = iv_mod$coefficients['A.star'], # point estimate
+              CI = confint(iv_mod)['A.star',])) # confidence interval
   
-  
-  
-
 }
 
+# --------------------------------------------------------
+#               MULTIPLE IMPUTATION
+# --------------------------------------------------------
 
+erf_mime <- function(data, m = 50) {
+  
+  #' Performs multiple imputation for ME correction, following Josey et 
+  #' al. (2023) but with a validation set
+  
+  # Turn into missing data problem explicitly by recasting the unobserved X
+  # values as missing so that we can use mice
+  data_imp <- data %>% mutate(A = replace(A, val.idx == 0, NA)) %>% dplyr::select(-val.idx)
+  
+  # run the (congenial) MI procedure
+  invisible(capture.output(imps <- mice(data_imp, method = 'norm.boot', m = m)))
+  
+  # loop through imputed datasets, estimate PS 
+  vals <- sapply(1:m, function(d, imps) {
+    
+    # fit propensity score model with d-th dataset
+    curr_data <- complete(imps, d)
+    
+    # Record ATE estimate and its SE
+    results <- with(curr_data, erf(y = Y, a = A, x = data.frame(W, X), a0 = 0, a1 = 1))
+    est <- results$EST
+    var <- results$VAR
+    
+    return(c(est = est, var = var))
+    
+  }, imps = imps)
+  
+  # grab ests and their SEs
+  ests <- vals[1,]
+  vars <- vals[2,]
+  
+  # compute SE est 
+  Mhat <- mean(ests) 
+  bw_var <- sum((ests - Mhat)^2)/(length(ests) - 1) # var bw ests
+  wi_var <- mean(vars) # within variance
+  Vhat <- wi_var + (1 + (1/length(ests))) * bw_var
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + Mhat, qnorm(.975)*sqrt(Vhat) + Mhat)
+  
+  return(list(EST = Mhat, CI = CI_hat))
+  
+}

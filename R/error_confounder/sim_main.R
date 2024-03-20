@@ -26,7 +26,7 @@ library(AIPW)
 source('~/Github/ME-Causal-Review/R/error_confounder/correction_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/data_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/output_functions.R')
-source('~/Github/ME-Causal-Review/R/utility.R')
+source('~/Github/ME-Causal-Review/R/ATE.R')
 
 options(show.error.locations = TRUE)
 # ------------------------------------------------------------------------------
@@ -34,44 +34,31 @@ options(show.error.locations = TRUE)
 flnm <- gsub(':', '-', Sys.time()) # filename suffixed with date/time
 flnm <- paste('sim_results_', gsub(' ', '_', flnm), '.csv', sep = '')
 
-simdir <- '../../output/sim_results/' # directory
+simdir <- '~/Github/ME-Causal-Review/output/sim_results/' # directory
 fullpath <- paste(simdir, flnm, sep = '') # construct path to final file name 
 
 # ------------------------------------------------------------------------------
 # Set up simulation parameters
-methods <- c('psc', 'simex', 'iv', 'mime') 
-sig_u_grid <- c(0, 0.25, 0.5, 0.75, 1) # ME variances
-ba_grid <- c(1) # treatment effect
-aw_grid <- c(0.25) # coef of w in the ps model
-bw_grid <- c(-1)
+methods <- c('psc', 'rc', 'simex', 'iv', 'mime') 
+sig_u_grid <- c(0.1, 0.25, 0.5, 0.75, 0.9) # ME variances
+ba_grid <- c(1, -1) # treatment effect
+aw_grid <- c(0.5) # coef of w in the ps model
+bw_grid <- c(-1) # coef of w in the outcome model
 n_grid <- c(1000, 2000) # sample size
-bin_grid <- c(FALSE, TRUE) # 0/1 continuous/binary
+bin_grid <- c(FALSE) # T/F continuous/binary
 
-methods <- c('psc_reg','iv','mime','simex_ind') 
-sig_u_grid <- c(0.1,0.25,0.5,0.75,0.9) # ME variances
-ba_grid <- c(0.1) # treatment effect
-n_grid <- c(1500, 3000, 4500) # sample size
-bin_grid <- c(1) # 0/1 continuous/binary
-rho_grid <- c(0.25) # corr b/w x and z
-psi_grid <- c(0.5) # corr b/w v and x
-ax_grid <- 0.25 # coeff of x in the ps model
-bax_grid <- c(0) 
-baz_grid <- c(0)
-# ------------------------------------------------------------------------------
-# Load correction/sim/output functions 
-source('correction_functions.R')
-source('data_functions.R')
-source('output_functions.R')
+
 # ------------------------------------------------------------------------------
 # Run simulations, store results
 op_chars <- get_results(methods,
                         sig_u_grid,
+                        aw_grid,
                         ba_grid,
+                        bw_grid,
                         n_grid, 
-                        rho_grid,
-                        psi_grid,
-                        ax_grid,
-                        bin_grid, nsim=10)
+                        bin_grid, 
+                        mc.cores = 1,
+                        nsim = 100)
 
 # Output the results as a csv
 
