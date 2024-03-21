@@ -29,9 +29,9 @@ fullpath <- paste(simdir,flnm,sep='') # construct path to final file name
 # Run It!
 
 methods <- c('rc', 'simex', 'iv', 'mime')
-sig_u_grid <- c(0.1,0.3,0.5,0.9) 
-ba_grid <- c(1)
-n_grid <- c(2000)
+sig_u_grid <- c(0.1,0.25,0.5,0.75,0.9) 
+ba_grid <- c(1, -1)
+n_grid <- c(1000, 2000)
 bin_grid <- c(FALSE)
 
 op_chars <- get_results(methods,
@@ -41,6 +41,5 @@ op_chars <- get_results(methods,
                         bin_grid, 
                         mc.cores = 1,
                         nsim = 100)
-
 
 write.csv(thecheck, file=fullpath)

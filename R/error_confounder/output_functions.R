@@ -163,11 +163,11 @@ get_results <- function(methods,
     n <- scen$n # sample size
     bin <- scen$bin # binary outcome indicator
     
+    # Keep track of progress
+    print(paste(scen))
+    
     # Get operating characteristics for current grid point
     sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, aw, ba, bw, bin) {
-      
-      # Keep track of progress
-      print(paste('On iteration', s, 'of', nsim))
       
       # simulate data for current iteration
       data <- generate_data(n = n, sig_u = sig_u, binary = bin, aw = aw, ba = ba, bw = bw)
@@ -181,9 +181,9 @@ get_results <- function(methods,
     
     # Compute avg operating characteristics from stats of interest 
     final_stats <- sim_stats %>% group_by(method) %>%
-      summarize(bias = 100*mean(bias/ba, na.rm = T),
-                mse = mean(bias^2, na.rm = T),
-                ATE = mean(ATE, na.rm = T),
+      summarize(bias = 100*mean(bias/abs(ba), na.rm = T),
+                rmse = sqrt(mean(bias^2, na.rm = T)),
+                estimate = mean(ATE, na.rm = T),
                 ci_cov = 100*mean(ci_cov, na.rm = T),
                 power = 100*mean(pow, na.rm = T))
     

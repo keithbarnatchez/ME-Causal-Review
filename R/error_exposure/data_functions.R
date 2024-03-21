@@ -32,13 +32,13 @@ trt_model <- function(W, X, V, aw = .25, ax = .25,  av = .25, a0 = 0) {
   #' properly-measured exposure Z
   
   mu <- a0 + aw*W + ax*X + av*V
-  A <- rnorm(length(X),mean = mu,sd=1) 
+  A <- rnorm(length(X), mean = mu, sd = 1) 
   return(A)
   
 }
 
 out_model <- function(A, W, X, sig_e = 1, binary = FALSE, ba = 1, bw = 1,
-                          baw = 0.2, bx = 1, bax = 0.2, b0 = 0) {
+                      baw = 0.2, bx = 1, bax = 0.2, b0 = 0) {
   
   #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z
   #' INPUTS:
@@ -128,8 +128,7 @@ generate_data <- function(n, sig_e = 1, sig_u = 0.1,
   val.idx <- rbinom(n, size = 1, prob = v_share)
   
   out_data <- data.frame(Y = Y, A = A, A.star = A.star,
-                         W = W, X = X, V = V, 
-                         val.idx = val.idx)
+                         W = W, X = X, V = V, val.idx = val.idx)
   
   return(out_data)
   

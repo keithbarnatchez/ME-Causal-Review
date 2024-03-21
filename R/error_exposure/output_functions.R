@@ -13,13 +13,12 @@ stats_getter <- function(results, true_effect) {
   #' Called within calc_stats() on each selected method
   #' Retrieves list of results of interest
   
-  bias <- (results$EST - true_effect)/true_effect
-  rmse <- sqrt(mean(bias^2))
+  bias <- results$EST - true_effect
   ci_cov <- ifelse((results$CI[1] <= true_effect) & (results$CI[2] >= true_effect), 1, 0)
   power <- ifelse((results$CI[1] <= 0) & (results$CI[2] >= 0), 0, 1)
   
-  return(list(bias=bias, rmse = rmse, ci_cov = ci_cov, 
-              pow = power, estimate = results$EST))
+  return(list(bias = bias, ci_cov = ci_cov, 
+              pow = power, est = results$EST))
   
 }
 
@@ -48,20 +47,18 @@ calc_stats <- function(data, methods, a, s) {
   res_ideal <- erf_ideal(data)
   ideal_stats <- stats_getter(res_ideal, true_effect = a)
   stats <- data.frame(bias=ideal_stats$bias,
-                      est = ideal_stats$estimate,
+                      est = ideal_stats$est,
                       ci_cov = ideal_stats$ci_cov,
                       pow = ideal_stats$pow,
-                      rmse = ideal_stats$rmse,
                       method = 'Ideal', iteration = s)
   
   # Naive
   res_naive <- erf_naive(data)
   naive_stats <- stats_getter(res_naive, true_effect = a)
   stats <- rbind(stats, data.frame(bias = naive_stats$bias,
-                                   est = naive_stats$estimate,
+                                   est = naive_stats$est,
                                    ci_cov = naive_stats$ci_cov,
                                    pow = naive_stats$pow,
-                                   rmse = naive_stats$rmse,
                                    method = 'Naive', iteration = s))
 
   # Regression Calibration
@@ -70,10 +67,9 @@ calc_stats <- function(data, methods, a, s) {
     res_rcal <- erf_rc(data)
     rcal_stats <- stats_getter(res_rcal, true_effect = a)
     stats <- rbind(stats, data.frame(bias = rcal_stats$bias,
-                                     est = rcal_stats$estimate,
+                                     est = rcal_stats$est,
                                      ci_cov = rcal_stats$ci_cov,
                                      pow = rcal_stats$pow,
-                                     rmse = rcal_stats$rmse,
                                      method = 'RC', iteration = s))
     
   }
@@ -84,10 +80,9 @@ calc_stats <- function(data, methods, a, s) {
     res_csme <- erf_csme(data)
     csme_stats <- stats_getter(res_csme, true_effect = a)
     stats <- rbind(stats, data.frame(bias = csme_stats$bias,
-                                     est = csme_stats$estimate,
+                                     est = csme_stats$est,
                                      ci_cov = csme_stats$ci_cov,
                                      pow = csme_stats$pow,
-                                     rmse = csme_stats$rmse,
                                      method = 'CSME',iteration=s))
     
   }
@@ -98,10 +93,9 @@ calc_stats <- function(data, methods, a, s) {
     res_iv <- erf_iv(data)
     iv_stats <- stats_getter(res_iv, true_effect = a)
     stats <- rbind(stats, data.frame(bias = iv_stats$bias,
-                                     est = iv_stats$estimate,
+                                     est = iv_stats$est,
                                      ci_cov = iv_stats$ci_cov,
                                      pow = iv_stats$pow,
-                                     rmse = iv_stats$rmse,
                                      method = 'IV', iteration = s))
     
   }
@@ -112,10 +106,9 @@ calc_stats <- function(data, methods, a, s) {
     res_simex <- erf_simex(data)
     simex_stats <- stats_getter(res_simex, true_effect = a)
     stats <- rbind(stats, data.frame(bias = simex_stats$bias,
-                                     est = simex_stats$estimate,
+                                     est = simex_stats$est,
                                      ci_cov = simex_stats$ci_cov,
                                      pow = simex_stats$pow,
-                                     rmse = simex_stats$rmse,
                                      method = 'SIMEX', iteration = s))
 
   }
@@ -126,10 +119,9 @@ calc_stats <- function(data, methods, a, s) {
     res_mime <- erf_mime(data)
     mime_stats <- stats_getter(res_mime, true_effect = a)
     stats <- rbind(stats, data.frame(bias = mime_stats$bias,
-                                     est = mime_stats$estimate,
+                                     est = mime_stats$est,
                                      ci_cov = mime_stats$ci_cov,
                                      pow = mime_stats$pow,
-                                     rmse = mime_stats$rmse,
                                      method = 'MIME', iteration = s))
     
   }
@@ -179,12 +171,12 @@ get_results <- function(methods,
     n <- scen$n # sample size
     bin <- scen$bin # binary outcome indicator
     
+    # Keep track of progress
+    print(paste(scen))
+    
     # set up dataframe for calculating operating characteristics by group
     sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, ba, bin, methods, ...) {
-      
-      # Keep track of progress
-      print(paste('On iteration', s, 'of', nsim))
-      
+
       # simulate data for current iteration
       data <- generate_data(n = n, sig_u = sig_u, binary = bin, ba = ba)
       
@@ -197,9 +189,9 @@ get_results <- function(methods,
     
     # Compute avg operating characteristics from stats of interest 
     final_stats <- sim_stats %>% group_by(method) %>%
-      summarize(bias = 100*mean(bias/ba, na.rm = T),
-                mse = mean(bias^2, na.rm = T),
-                est = mean(est, na.rm = T),
+      summarize(bias = 100*mean(bias/abs(ba), na.rm = T),
+                rmse = sqrt(mean(bias^2, na.rm = T)),
+                estimate = mean(est, na.rm = T),
                 ci_cov = 100*mean(ci_cov, na.rm = T),
                 power = 100*mean(pow, na.rm = T))
     
