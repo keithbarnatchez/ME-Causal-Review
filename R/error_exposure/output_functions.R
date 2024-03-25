@@ -126,6 +126,19 @@ calc_stats <- function(data, methods, a, s) {
     
   }
   
+  # CV
+  if ('cv' %in% methods) {
+    
+    res_cv <- erf_cv(data)
+    cv_stats <- stats_getter(res_cv, true_effect = a)
+    stats <- rbind(stats, data.frame(bias = cv_stats$bias,
+                                     est = cv_stats$est,
+                                     ci_cov = cv_stats$ci_cov,
+                                     pow = cv_stats$pow,
+                                     method = 'CV', iteration = s))
+    
+  }
+  
   return(stats)
   
 }

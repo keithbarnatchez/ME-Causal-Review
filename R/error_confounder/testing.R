@@ -28,12 +28,13 @@ psc <- ate_psc(data) # propensity score calibration
 iv <- ate_iv(data) # IV
 mime <- ate_mime(data, method = "aipw")
 simex <- ate_simex(data, method = "aipw")
+cv <- ate_cv(data)
 
 # ------------------------------------------------
 # Test the get_results() function
 # ------------------------------------------------
 
-methods <- c('psc','iv') 
+methods <- c('psc','iv','cv') 
 sig_u_grid <- c(0.1,0.3,0.5,0.9) 
 aw_grid = c(0.5)
 ba_grid <- c(1)

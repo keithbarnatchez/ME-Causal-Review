@@ -30,12 +30,13 @@ rc <- erf_rc(data) # propensity score calibration
 iv <- erf_iv(data) # IV
 mime <- erf_mime(data) # multiple imputation
 simex <- erf_simex(data) # simulation extrapolation
+cv <- erf_cv(data) # simulation extrapolation
 
 # ------------------------------------------------
 # Test the get_results() function
 # ------------------------------------------------
 
-methods <- c('iv') 
+methods <- c('iv', 'cv') 
 sig_u_grid <- c(0.1,0.3,0.5,0.9) 
 ba_grid <- c(-1)
 n_grid <- c(2000)

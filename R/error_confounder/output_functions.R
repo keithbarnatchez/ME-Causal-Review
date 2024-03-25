@@ -109,6 +109,19 @@ calc_stats <- function(data, methods, a, s) {
     
   }
   
+  # CV
+  if ('cv' %in% methods) {
+    
+    ATE <- ate_cv(data) 
+    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
+    stats <- rbind(stats, data.frame(bias = bias, ATE=ATE[[1]], 
+                                     ci_cov = ci_cov, pow = pow,
+                                     method = 'CV', iteration = s)) 
+    
+  }
+  
   return(stats)
   
 }

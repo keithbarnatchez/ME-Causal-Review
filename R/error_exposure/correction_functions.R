@@ -231,7 +231,7 @@ erf_iv <- function(data) {
   #' - data: A dataframe created with the generate_data() function
   #' 
   #' OUTPUTS:
-  #' - A list containing the ATE estimate and confidence interval
+  #' - A list containing the estimate and confidence interval
   #' 
   #' REQUIRED PACKAGES:
   #' - AER
@@ -266,7 +266,7 @@ erf_mime <- function(data, m = 50) {
     # fit propensity score model with d-th dataset
     curr_data <- complete(imps, d)
     
-    # Record ATE estimate and its SE
+    # Record ERF estimate and its SE
     results <- with(curr_data, erf(y = Y, a = A, x = data.frame(W, X), a0 = 0, a1 = 1))
     est <- results$EST
     var <- results$VAR
@@ -287,5 +287,76 @@ erf_mime <- function(data, m = 50) {
   CI_hat <- c(qnorm(.025)*sqrt(Vhat) + Mhat, qnorm(.975)*sqrt(Vhat) + Mhat)
   
   return(list(EST = Mhat, CI = CI_hat))
+  
+}
+
+# --------------------------------------------------------
+#                 CONTROL VARIATES
+# --------------------------------------------------------
+
+erf_cv <- function(data) {
+  
+  #' Given a dataframe data (containing a validation data indicator), implements
+  #' the control variates method to obtain ERF estimate
+  #'
+  #' INPUTS:
+  #' - a dataframe from the gen_data() function
+  #' OUTPUTS:
+  #' - a list containing the ERF estimate, variance estimate and 95% CI
+  
+  demean <- function(vec) {
+    return(vec-mean(vec))
+  }
+  
+  # Keep track of val data
+  data_val <- data %>% filter(val.idx == 1)
+  
+  # Step 1: estimate ERF in validation data
+  tau_val_mod <- erf(a = data_val$A, y = data_val$Y, 
+                     x = subset(data_val, select = c("W","X")),
+                     a0 = 0, a1 = 1, sl.lib = c("SL.glm")) 
+  
+  tau_hat_val <- tau_val_mod$EST
+  v_hat <- tau_val_mod$VAR
+  varphi_val <- tau_val_mod$EIF
+  
+  # Step 2: estimate control variates
+  psi1 <- erf(a = data$A.star, y = data$Y, 
+              x = subset(data, select = c("W","X")),
+              a0 = 0, a1 = 1, sl.lib = c("SL.glm"))
+  
+  psi2 <- erf(a = data_val$A.star, y = data_val$Y, 
+              x = subset(data_val, select = c("W","X")),
+              a0 = 0, a1 = 1, sl.lib = c("SL.glm"))
+  
+  cv_mods <- list(psi1 = psi1, psi2 = psi2)
+  
+  tau_ep_val <- psi1$EST
+  tau_ep_main <- psi2$EST
+  
+  # Step 3: estimate Gamma and V
+  phi_main <- psi1$EIF
+  phi_val <- psi2$EIF
+  
+  # Get sample sizes
+  n_main <- length(phi_main)
+  n_val <- length(phi_val)
+  
+  # Estimate Gamma
+  gamma_hat <- (1 - n_val/n_main)*(1/n_val)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
+  
+  # Estimate V
+  V_hat <- (1 - n_val/n_main)*(1/n_val)*mean(demean(phi_main)^2)
+  
+  ## Step 4: subtract off (may need to flip the subtraction sign)
+  tau_cv <- unname(tau_hat_val - (gamma_hat/V_hat)*(tau_ep_main - tau_ep_val))
+  
+  # Get variance estimate and 95% CI
+  var_hat <- v_hat - gamma_hat^2/V_hat
+  ci_low <- tau_cv - qnorm(0.975)*sqrt(var_hat)
+  ci_high <- tau_cv + qnorm(0.975)*sqrt(var_hat)
+  
+  # Return the ERF est and associated variance
+  return(list(EST = tau_cv, CI = c(ci_low,ci_high)))
   
 }

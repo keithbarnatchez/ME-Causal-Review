@@ -288,48 +288,37 @@ ate_cv <- function(data) {
   #' OUTPUTS:
   #' - a list containing the ATE estimate, variance estimate and 95% CI
   
+  demean <- function(vec) {
+    return(vec-mean(vec))
+  }
+  
   # Keep track of val data
-  data_val <- data %>% filter(val_idx==1)
+  data_val <- data %>% filter(val.idx == 1)
   
   # Step 1: estimate ATE in validation data
-  tau_val_mod <- AIPW$new(Y = data_val$Y,
-                          A = data_val$A,
-                          W = subset(data_val, select=c("W","X")),
-                          Q.SL.library = "SL.glm",
-                          g.SL.library = "SL.glm",
-                          k_split = 1,
-                          verbose = FALSE)$fit()$summary()
+  tau_val_mod <- aipw(a = data_val$A, y = data_val$Y, 
+       x = subset(data_val, select = c("W","X")),
+       sl.lib = c("SL.glm")) 
   
-  tau_hat_val <- tau_val_mod$estimates$RD['Estimate']
-  v_hat <- var(tau_val_mod$obs_est$aipw_eif1 - 
-                 tau_val_mod$obs_est$aipw_eif0)/nrow(data_val)
+  tau_hat_val <- tau_val_mod$ATE
+  v_hat <- tau_val_mod$VAR
+  varphi_val <- tau_val_mod$EIF
   
   # Step 2: estimate control variates
-  psi1 <- AIPW$new(Y = data$Y,
-                   A = data$A,
-                   W = subset(data, select = c("W.star", "X")),
-                   Q.SL.library = "SL.glm",
-                   g.SL.library = "SL.glm",
-                   k_split = 1,
-                   verbose = FALSE)$fit()$summary()
+  psi1 <- aipw(a = data$A, y = data$Y, 
+               x = subset(data, select = c("W.star","X")),
+               sl.lib = c("SL.glm")) 
   
-  psi2 <- AIPW$new(Y = data_val$Y,
-                   A = data_val$A,
-                   W = subset(data_val, select = c("W.star", "X")),
-                   Q.SL.library = "SL.glm",
-                   g.SL.library = "SL.glm",
-                   k_split = 1,
-                   verbose = FALSE)$fit()$summary()
+  psi2 <- aipw(a = data_val$A, y = data_val$Y, 
+               x = subset(data_val, select = c("W.star","X")),
+               sl.lib = c("SL.glm")) 
   
-  cv_mods <- list(psi1 = psi1, psi2 = psi2)
-  
-  tau_ep_val <- cv_mods$psi1$estimates$RD['Estimate']
-  tau_ep_main <- cv_mods$psi2$estimates$RD['Estimate']
+  tau_ep_val <- psi1$ATE
+  tau_ep_main <- psi2$ATE
   
   # Step 3: estimate Gamma and V
-  phi_main <- psi1$obs_est$aipw_eif1 - psi1$obs_est$aipw_eif0
-  phi_val <- psi2$obs_est$aipw_eif1 - psi2$obs_est$aipw_eif0
-  varphi_val <- tau_val_mod$obs_est$aipw_eif1 - tau_val_mod$obs_est$aipw_eif0
+  phi_main <- psi1$EIF
+  phi_val <- psi2$EIF
   
   # Get sample sizes
   n_main <- length(phi_main)
@@ -350,8 +339,7 @@ ate_cv <- function(data) {
   ci_high <- tau_cv + qnorm(0.975)*sqrt(var_hat)
   
   # Return the ATE est and associated variance
-  return(list(ATE = tau_cv, CI = c(ci_low,ci_high))
-  )
+  return(list(ATE = tau_cv, CI = c(ci_low,ci_high)))
   
 }
  

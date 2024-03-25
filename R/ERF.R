@@ -15,14 +15,16 @@ erf <- function(a, y, x, a0, a1, family = gaussian(),
   results <- contrast(a0 = a0, a1 = a1, psi = psi, a = a, se.fit = TRUE, 
                       a.vals = a.vals, int.mat = int.mat)
   
-  Mhat <- results[1]
-  Vhat <- results[2]
+  Mhat <- results$mu
+  Vhat <- results$sig2
+  EIF_hat <- results$eif
   
   # Rely on asymptotics for CI construction
   lower_ci <- Mhat - sqrt(Vhat)*qnorm(0.975)
   upper_ci <- Mhat + sqrt(Vhat)*qnorm(0.975)
   
-  return(list(EST = Mhat, CI = c(lower_ci, upper_ci), VAR = Vhat))
+  return(list(EST = Mhat, CI = c(lower_ci, upper_ci),
+              VAR = Vhat, EIF = EIF_hat))
   
   return(out)
   
@@ -103,18 +105,18 @@ contrast <- function(a0, a1, a, psi, bw = 1, se.fit = FALSE, a.vals = NULL, int.
     intfn2.mat <- g.vals * int.mat
     
     int1 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n), 
-                           byrow = T, nrow = n)*
+                           byrow = T, nrow = n) *
                       (intfn1.mat[,-1] + intfn1.mat[,-length(a.vals)])/2)
     int2 <- rowSums(matrix(rep((a.vals[-1] - a.vals[-length(a.vals)]), n),
-                           byrow = T, nrow = n)*
+                           byrow = T, nrow = n) *
                       (intfn2.mat[,-1] + intfn2.mat[,-length(a.vals)])/2)
     
     U <- solve(crossprod(g.std))
-    V <- cbind((psi - eta) + int1, a * (psi - eta) + int2)
-    sig2 <- t(c(0, a1 - a0)) %*% U %*% crossprod(V) %*% U %*% c(0, a1 - a0)
+    V <- n*cbind((psi - eta) + int1, a * (psi - eta) + int2)
+    eif <- c(t(c(0, a1 - a0) %*% U %*% t(V)))
+    sig2 <- var(eif)/n
     
-    return(c(mu = mu, sig2 = sig2))
-    
+    return(list(mu = mu, sig2 = sig2, eif = eif))
     
   } else
     return(mu)
