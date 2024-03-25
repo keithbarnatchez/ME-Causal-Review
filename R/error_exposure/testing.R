@@ -7,6 +7,7 @@ library(AER) # for instrumental variables
 library(SuperLearner)
 library(mgcv)
 library(geex)
+library(KernSmooth)
 library(parallel)
 
 # Code folders
