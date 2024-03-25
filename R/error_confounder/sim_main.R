@@ -19,8 +19,8 @@ library(mice) # for multiple imputation
 library(AER) # for instrumental variables
 library(SuperLearner)
 library(mgcv)
-library(parallel)
 library(AIPW)
+library(parallel)
 
 # Code folder is root directory in case you're working interactively
 source('~/Github/ME-Causal-Review/R/error_confounder/correction_functions.R')
@@ -31,9 +31,10 @@ source('~/Github/ME-Causal-Review/R/ATE.R')
 options(show.error.locations = TRUE)
 # ------------------------------------------------------------------------------
 # Set up relevant paths for output
-flnm <- gsub(':', '-', Sys.time()) # filename suffixed with date/time
-flnm <- paste('sim_results_', gsub(' ', '_', flnm), '.csv', sep = '')
+# flnm <- gsub(':', '-', Sys.time()) # filename suffixed with date/time
+# flnm <- paste('sim_results_', gsub(' ', '_', flnm), '.csv', sep = '')
 
+flnm <- "confounder_results.csv"
 simdir <- '~/Github/ME-Causal-Review/output/sim_results/' # directory
 fullpath <- paste(simdir, flnm, sep = '') # construct path to final file name 
 
@@ -41,9 +42,9 @@ fullpath <- paste(simdir, flnm, sep = '') # construct path to final file name
 # Set up simulation parameters
 methods <- c('psc', 'rc', 'simex', 'iv', 'mime') 
 sig_u_grid <- c(0.1, 0.25, 0.5, 0.75, 0.9) # ME variances
-ba_grid <- c(1, -1) # treatment effect
-aw_grid <- c(0.5) # coef of w in the ps model
-bw_grid <- c(-1) # coef of w in the outcome model
+ba_grid <- c(1) # treatment effect
+aw_grid <- c(0.5, -0.5) # coef of w in the ps model
+bw_grid <- c(0.5, -0.5) # coef of w in the outcome model
 n_grid <- c(1000, 2000) # sample size
 bin_grid <- c(FALSE) # T/F continuous/binary
 
@@ -57,8 +58,8 @@ op_chars <- get_results(methods,
                         bw_grid,
                         n_grid, 
                         bin_grid, 
-                        mc.cores = 1,
-                        nsim = 100)
+                        mc.cores = 20,
+                        nsim = 500)
 
 # Output the results as a csv
 

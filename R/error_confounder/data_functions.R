@@ -41,7 +41,7 @@ trt_model <- function(W, X, aw = 0.5, ax = 0.5, a0 = 0) {
 }
 
 out_model <- function(A, W, X, sig_e = 1, binary = FALSE,
-                      ba = 1, bw = 1, bx = -1,
+                      ba = 1, bw = 0.5, bx = -0.5,
                       baw = 0.2, bax = 0.2, b0 = 0) {
   
   #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z

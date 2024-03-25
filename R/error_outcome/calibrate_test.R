@@ -69,7 +69,7 @@ out <- mclapply(1:n.sim, function(i, ...) {
   return(list(est = t(data.frame(true_erc = true_erc, naive_est = naive$estimate, adjust_est = adjust$estimate)),
               se = t(data.frame(naive_se = naive$se, adjust_se = adjust$se))))
   
-}, mc.cores = 8, mc.preschedule = TRUE)
+}, mc.cores = 25, mc.preschedule = TRUE)
 
 stop <- Sys.time()
 stop - start

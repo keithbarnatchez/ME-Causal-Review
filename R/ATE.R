@@ -103,13 +103,13 @@ aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
   ATE_hat <- mean(term1 - term2*term3)
   
   # Sandwich estimator
-  Vhat <- (term1 - term2*term3) - ATE_hat
-  Vhat <- sum(Vhat^2)/(length(Vhat)^2)
+  EIF_hat <- (term1 - term2*term3) - ATE_hat
+  Vhat <- sum(EIF_hat^2)/(length(EIF_hat)^2)
   
   # Rely on asymptotics for CI construction
   lower_ci <- ATE_hat - sqrt(Vhat)*qnorm(0.975)
   upper_ci <- ATE_hat + sqrt(Vhat)*qnorm(0.975)
   
-  return(list(ATE = ATE_hat, VAR = Vhat, CI = c(lower_ci, upper_ci)))
+  return(list(ATE = ATE_hat, VAR = Vhat, EIF = EIF, CI = c(lower_ci, upper_ci)))
   
 }
