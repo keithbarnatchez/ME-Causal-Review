@@ -343,10 +343,10 @@ erf_cv <- function(data) {
   n_val <- length(phi_val)
   
   # Estimate Gamma
-  gamma_hat <- (1 - n_val/n_main)*(1/n_val)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
+  gamma_hat <- (1 - n_val/n_main)*(1/n_val)*cov(cbind(phi_val, varphi_val))[1,2]
   
   # Estimate V
-  V_hat <- (1 - n_val/n_main)*(1/n_val)*mean(demean(phi_main)^2)
+  V_hat <- (1 - n_val/n_main)*(1/n_val)*var(phi_main)
   
   ## Step 4: subtract off (may need to flip the subtraction sign)
   tau_cv <- unname(tau_hat_val - (gamma_hat/V_hat)*(tau_ep_main - tau_ep_val))

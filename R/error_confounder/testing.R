@@ -40,7 +40,7 @@ aw_grid = c(0.5)
 ba_grid <- c(1)
 bw_grid <- c(-1)
 n_grid <- c(2000)
-bin_grid <- c(FALSE)
+rho_grid <- c(0.5)
 
 op_chars <- get_results(methods,
                         sig_u_grid,
@@ -48,7 +48,7 @@ op_chars <- get_results(methods,
                         ba_grid,
                         bw_grid,
                         n_grid, 
-                        bin_grid, 
+                        rho_grid, 
                         mc.cores = 1,
                         nsim = 100)
 

@@ -19,7 +19,6 @@ library(mice) # for multiple imputation
 library(AER) # for instrumental variables
 library(SuperLearner)
 library(mgcv)
-library(AIPW)
 library(parallel)
 
 # Code folder is root directory in case you're working interactively
@@ -40,13 +39,13 @@ fullpath <- paste(simdir, flnm, sep = '') # construct path to final file name
 
 # ------------------------------------------------------------------------------
 # Set up simulation parameters
-methods <- c('psc', 'rc', 'simex', 'iv', 'mime') 
+methods <- c('rc', 'simex', 'iv', 'mime', 'cv') 
 sig_u_grid <- c(0.1, 0.25, 0.5, 0.75, 0.9) # ME variances
 ba_grid <- c(1) # treatment effect
-aw_grid <- c(0.5, -0.5) # coef of w in the ps model
-bw_grid <- c(0.5, -0.5) # coef of w in the outcome model
+aw_grid <- c(0.25, 0.75) # coef of w in the ps model
+bw_grid <- c(0.25, 0.75) # coef of w in the outcome model
 n_grid <- c(1000, 2000) # sample size
-bin_grid <- c(FALSE) # T/F continuous/binary
+rho_grid <- c(0.15, 0.85) # high and low numbers on (-1,1)
 
 
 # ------------------------------------------------------------------------------
@@ -57,8 +56,8 @@ op_chars <- get_results(methods,
                         ba_grid,
                         bw_grid,
                         n_grid, 
-                        bin_grid, 
-                        mc.cores = 20,
+                        rho_grid, 
+                        mc.cores = 24,
                         nsim = 500)
 
 # Output the results as a csv

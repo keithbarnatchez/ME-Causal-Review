@@ -4,7 +4,7 @@
 #
 #
 rm(list=ls())
-source('plotting_functions.R')
+source('~/Github/ME-Causal-Review/R/error_confounder/plotting_functions.R')
 # merge_op_chars <- TRUE
 # if (merge_op_chars) {
 #   files <- list.files(path="path/to/dir", pattern="*.txt", full.names=TRUE, recursive=FALSE)
@@ -17,17 +17,15 @@ source('plotting_functions.R')
 # df2 <- df2 %>% filter(method=='SIMEX dir.')
 # df <- rbind(df1,df2)
 # write.csv(df,file='../../output/sim_results/res_merged_1202.csv')
-opcharspath <- "../../output/sim_results/sim_results_2023-06-22_17-24-12.csv"
+opcharspath <- "~/Github/ME-Causal-Review/output/sim_results/confounder_results.csv"
 df <- read.csv(opcharspath)
 
-df <- df %>% mutate(mse=sqrt(mse))
-# df <- df %>% mutate(mse = (ATE-))
 # ------------------------------------------------------------------------------
-df_long_bin <- df %>% filter(b==1) %>% pivot_longer(cols = c(bias, mse, ci_cov), names_to = "outcome", 
+df_long_bin <- df %>% filter(b==1) %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "outcome", 
                         values_to = "value") %>%
           mutate(outcome=replace(outcome, outcome=='bias','% Bias'),
                  outcome=replace(outcome, outcome=='ci_cov','C.I. Coverage'),
-                 outcome=replace(outcome, outcome=='mse','RMSE'),
+                 outcome=replace(outcome, outcome=='rmse','RMSE'),
                  ax=as.character(ax),
                  rho=as.character(rho)) %>%
   mutate(ax=replace(ax,ax=='0.25','Low confounding'),

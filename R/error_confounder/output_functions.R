@@ -132,7 +132,7 @@ get_results <- function(methods,
                         ba_grid,    # trt effect
                         bw_grid, 
                         n_grid,     # n
-                        bin_grid,   # whether outcome is binary or not
+                        rho_grid,   # correlation between confoundersß
                         nsim = 100,
                         mc.cores = 1) {
   
@@ -145,8 +145,7 @@ get_results <- function(methods,
   #'    - simex_ind: Indirect Simex (Kyle et al. 2016)
   #'    - iv: Instrumental variables
   #'  - sig_u_grid: Vector of values for measurement error variance
-  #'  - bin_grid: Vector of values specifying whether to use binary outcome. At 
-  #'              most length 2 (either 0, 1 or (0,1) )
+  #'  - rho_grid: Vector of values specifying correlation between confounders
   #'  - nsim: number of simulations per grid point
   #'  
   #' OUTPUTS:
@@ -161,7 +160,7 @@ get_results <- function(methods,
                          ba = ba_grid,
                          bw = bw_grid,
                          n = n_grid,
-                         bin = bin_grid,
+                         rho = rho_grid,
                          KEEP.OUT.ATTRS = TRUE, 
                          stringsAsFactors = FALSE)
   
@@ -174,21 +173,21 @@ get_results <- function(methods,
     ba <- scen$ba # effect of exposure on outcome
     bw <- scen$bw # effect of EP confounder on Y
     n <- scen$n # sample size
-    bin <- scen$bin # binary outcome indicator
+    rho <- scen$rho # rhoary outcome indicator
     
     # Keep track of progress
     print(paste(scen))
     
     # Get operating characteristics for current grid point
-    sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, aw, ba, bw, bin) {
+    sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, aw, ba, bw, rho) {
       
       # simulate data for current iteration
-      data <- generate_data(n = n, sig_u = sig_u, binary = bin, aw = aw, ba = ba, bw = bw)
+      data <- generate_data(n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, bw = bw)
       
       # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
       return(calc_stats(data, methods, a = ba, s))
       
-    }, n = n, sig_u = sig_u, bin = bin, aw = aw, ba = ba, bw = bw, mc.cores = mc.cores) # for s in 1:nsim
+    }, n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, bw = bw, mc.cores = mc.cores) # for s in 1:nsim
     
     sim_stats <- do.call(rbind, sim_stats_list)
     
@@ -202,7 +201,7 @@ get_results <- function(methods,
     
     # make note of the grid point
     final_stats$n = n; final_stats$sig_u = sig_u ; 
-    final_stats$bin = bin; final_stats$aw = aw; 
+    final_stats$rho = rho; final_stats$aw = aw; 
     final_stats$ba = ba; final_stats$bw = bw
 
     return(final_stats)

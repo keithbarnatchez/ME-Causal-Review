@@ -146,8 +146,8 @@ calc_stats <- function(data, methods, a, s) {
 get_results <- function(methods,
                         sig_u_grid, # me variance
                         ba_grid,    # main tmt effect
-                        n_grid,     # n
-                        bin_grid,   # interactions
+                        aw_grid,    # effect of covariate on a
+                        n_grid,   # sample size
                         nsim = 100,
                         mc.cores = 1) {
   
@@ -170,8 +170,8 @@ get_results <- function(methods,
   # Initialize dataframe for each stat of interest
   scen_df <- expand.grid(sig_u = sig_u_grid, 
                          ba = ba_grid, 
-                         n = n_grid, 
-                         bin = bin_grid,
+                         aw = aw_grid, 
+                         n = n_grid,
                          KEEP.OUT.ATTRS = TRUE, 
                          stringsAsFactors = FALSE)
   
@@ -181,22 +181,22 @@ get_results <- function(methods,
     
     sig_u <- scen$sig_u # me variance
     ba <- scen$ba # effect of exposure on outcome
+    aw <- scen$aw # effect size of confounder
     n <- scen$n # sample size
-    bin <- scen$bin # binary outcome indicator
-    
+
     # Keep track of progress
     print(paste(scen))
     
     # set up dataframe for calculating operating characteristics by group
-    sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, ba, bin, methods, ...) {
+    sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, ba, aw, methods, ...) {
 
       # simulate data for current iteration
-      data <- generate_data(n = n, sig_u = sig_u, binary = bin, ba = ba)
+      data <- generate_data(n = n, sig_u = sig_u, aw = aw, ba = ba)
       
       # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
       return(calc_stats(data = data, methods = methods, a = ba, s = s))
       
-    }, n = n, sig_u = sig_u, ba = ba, bin = bin, methods = methods, mc.cores = mc.cores) # for s in 1:nsim
+    }, n = n, sig_u = sig_u, ba = ba, aw = aw, methods = methods, mc.cores = mc.cores) # for s in 1:nsim
     
     sim_stats <- do.call(rbind, sim_stats_list)
     
@@ -210,7 +210,7 @@ get_results <- function(methods,
     
     # make note of the grid point
     final_stats$n = n; final_stats$sig_u = sig_u ; 
-    final_stats$bin = bin; final_stats$ba = ba; 
+    final_stats$aw = aw; final_stats$ba = ba; 
     
     return(final_stats)
     
