@@ -2,7 +2,7 @@
 # UTILITY FUNCTIONS
 # ---------------------------------------------------------
 
-ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
+ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction")) {
   
   if (is.null(pihat)) { # if aren't pre-supplying propensity scores
     # Get predicted propensity scores
@@ -64,7 +64,7 @@ ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
   
 }
 
-aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
+aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction")) {
   
   #' Main function for implementing AIPW estimator.
   #' 

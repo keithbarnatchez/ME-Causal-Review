@@ -29,20 +29,20 @@ meas_model <- function(W, sig_u) {
   
 }
 
-trt_model <- function(W, X, aw = 0.5, ax = 0.5, a0 = 0) {
+trt_model <- function(W, X, V, aw = 0.5, ax = -0.5, av = 0.25, a0 = 0) {
   
   #' Generates treatment model for A with error-prone exposure W and 
   #' properly-measured exposure X
   
-  pi <- expit(a0 + aw*W + ax*X)
+  pi <- expit(a0 + aw*W + ax*X + av*V)
   A <- rbinom(length(W), size = 1, prob = pi) 
   return(A)
   
 }
 
 out_model <- function(A, W, X, sig_e = 1, binary = FALSE,
-                      ba = 1, bw = 0.5, bx = -0.5,
-                      baw = 0.2, bax = 0.2, b0 = 0) {
+                      ba = 1, bw = -1, bx = 0.5, b0 = 0,
+                      baw = 0.25, bax = -0.25) {
   
   #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z
   #' INPUTS:
@@ -84,19 +84,19 @@ generate_covariates <- function(n, rho = 0.5, psi = -0.25) {
   #' - Matrix (X, Z, V) of simulated values following a MVN dist as specified
   #'  by user
   
-  return(rmvnorm(n, sigma = matrix(c(1. ,  rho,  psi,
-                                     rho,  1. ,   0.,
-                                     psi,  0. ,   1.),
-                                   nrow = 3, byrow = T)))
+  return(mvtnorm::rmvnorm(n = n, sigma = matrix(c(1 ,  rho,  psi,
+                                                  rho,  1 ,   0,
+                                                  psi,  0 ,   1),
+                                                nrow = 3, byrow = T)))
   
 }
 
 generate_data <- function(n, sig_e = 1, sig_u = 0.1,
                           rho = 0.5, psi = -0.25,
-                          aw = 0.5, ax = -0.5, a0 = 0,
+                          aw = 0.5, ax = -0.5, av = 0.25, a0 = 0,
                           ba = 1, bw = -1, bx = 0.5, b0 = 0,
                           baw = 0.25, bax = -0.25,
-                          v_share = 0.1, binary = FALSE) {
+                          v_share = 0.2, binary = FALSE) {
   
   #' Generates dataset with outcome variable y, error-prone exposure X with 
   #' measurements W, binary treatment of interest T, and confounding variable Z.
@@ -121,7 +121,7 @@ generate_data <- function(n, sig_e = 1, sig_u = 0.1,
   W <- covariates[,1] ; X <- covariates[,2] ; V <- covariates[,3]
   
   # Simulate treatment process
-  A <- trt_model(W = W, X = X, aw = aw, ax = ax, a0 = a0)
+  A <- trt_model(W = W, X = X, V = V, aw = aw, ax = ax, av = av, a0 = a0)
   
   # Simulate outcome 
   Y <- out_model(A = A, W = W, X = X, 

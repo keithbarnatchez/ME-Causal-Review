@@ -27,11 +27,11 @@ calc_stats <- function(data, methods, a, s) {
   CI_ideal <- ATE_ideal[[3]] ; CI_naive <- ATE_naive[[3]]
   
   # Bias
-  bias_ideal <- ATE_ideal[[1]] - a ; bias_naive <- ATE_naive[[1]] - a
+  bias_ideal <- ATE_ideal[[1]] - true_effect ; bias_naive <- ATE_naive[[1]] - true_effect
   
   # CI coverage
-  ci_cov_ideal <- ifelse( (CI_ideal[1] <= a) & (CI_ideal[2] >= a) , 1, 0)
-  ci_cov_naive <- ifelse( (CI_naive[1] <= a) & (CI_naive[2] >= a) , 1, 0)
+  ci_cov_ideal <- ifelse( (CI_ideal[1] <= true_effect) & (CI_ideal[2] >= true_effect) , 1, 0)
+  ci_cov_naive <- ifelse( (CI_naive[1] <= true_effect) & (CI_naive[2] >= true_effect) , 1, 0)
   
   # Power
   pow_ideal <- ifelse(CI_ideal[1] > 0 | CI_ideal[2] < 0, 1, 0) 
@@ -48,8 +48,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('psc' %in% methods) {
     
     ATE <- ate_psc(data) 
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE=ATE[[1]], 
                                      ci_cov = ci_cov, pow = pow,
@@ -61,8 +61,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('rc' %in% methods) {
     
     ATE <- ate_rc(data, method = "aipw") 
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]], 
                                      ci_cov = ci_cov, pow = pow,
@@ -74,8 +74,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('iv' %in% methods) {
     
     ATE <- ate_iv(data)
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
                                      ci_cov = ci_cov, pow = pow, 
@@ -87,8 +87,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('simex' %in% methods) {
     
     ATE <- ate_simex(data, method = "aipw")
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]] > 0 | CI[[2]] < 0, 1, 0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
                                      ci_cov = ci_cov, pow = pow,
@@ -100,8 +100,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('mime' %in% methods) {
     
     ATE <- ate_mime(data, method = "aipw")
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1, 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1, 0)
     pow <- ifelse(CI[[1]] > 0 | CI[[2]] < 0, 1, 0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
                                      ci_cov = ci_cov, pow = pow, 
@@ -113,8 +113,8 @@ calc_stats <- function(data, methods, a, s) {
   if ('cv' %in% methods) {
     
     ATE <- ate_cv(data) 
-    bias <- ATE[[1]] - a ; CI <- ATE[[2]]
-    ci_cov <- ifelse((CI[1] <= a) & (a <= CI[2]), 1 , 0)
+    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
     stats <- rbind(stats, data.frame(bias = bias, ATE=ATE[[1]], 
                                      ci_cov = ci_cov, pow = pow,
@@ -128,8 +128,8 @@ calc_stats <- function(data, methods, a, s) {
 
 get_results <- function(methods,
                         sig_u_grid, # me variance
-                        aw_grid,    # trt effect
-                        ba_grid,    # trt effect
+                        ba_grid, 
+                        aw_grid,
                         bw_grid, 
                         n_grid,     # n
                         rho_grid,   # correlation between confoundersß
@@ -169,8 +169,8 @@ get_results <- function(methods,
   op_list <- lapply(scen_list, function(scen, methods, nsim, mc.cores) {
     
     sig_u <- scen$sig_u # me variance
-    aw <- scen$aw # effect of EP confounder on A
     ba <- scen$ba # effect of exposure on outcome
+    aw <- scen$aw # effect of EP confounder on A
     bw <- scen$bw # effect of EP confounder on Y
     n <- scen$n # sample size
     rho <- scen$rho # rhoary outcome indicator
@@ -182,10 +182,10 @@ get_results <- function(methods,
     sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, aw, ba, bw, rho) {
       
       # simulate data for current iteration
-      data <- generate_data(n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, bw = bw)
+      data <- generate_data(n = n, sig_u = sig_u, rho = rho, aw = aw, bw = bw, ba = ba)
       
       # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
-      return(calc_stats(data, methods, a = ba, s))
+      return(calc_stats(data, methods, true_effect = ba, s))
       
     }, n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, bw = bw, mc.cores = mc.cores) # for s in 1:nsim
     

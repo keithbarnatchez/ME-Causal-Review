@@ -147,7 +147,7 @@ ate_rc <- function(data, nboot = 100, method = "aipw") {
 #                          SIMEX
 # ---------------------------------------------------------
 
-ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 2, by = 0.2)) {
+ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 2, by = 0.1)) {
   
   #' INPUTS:
   #' - data: simulation data
@@ -296,45 +296,42 @@ ate_cv <- function(data) {
   data_val <- data %>% filter(val.idx == 1)
   
   # Step 1: estimate ATE in validation data
-  tau_val_mod <- aipw(a = data_val$A, y = data_val$Y, 
-       x = subset(data_val, select = c("W","X")),
-       sl.lib = c("SL.glm")) 
+  psi <- aipw(a = data_val$A, y = data_val$Y, 
+              x = subset(data_val, select = c("W","X"))) 
   
-  tau_hat_val <- tau_val_mod$ATE
-  v_hat <- tau_val_mod$VAR
-  varphi_val <- tau_val_mod$EIF
+  tau_hat_val <- psi$ATE
+  v_hat <- psi$VAR
+  varphi_val <- psi$EIF
   
   # Step 2: estimate control variates
-  psi1 <- aipw(a = data$A, y = data$Y, 
-               x = subset(data, select = c("W.star","X")),
-               sl.lib = c("SL.glm")) 
+  phi1 <- aipw(a = data$A, y = data$Y, 
+               x = subset(data, select = c("W.star","X")))
   
-  psi2 <- aipw(a = data_val$A, y = data_val$Y, 
-               x = subset(data_val, select = c("W.star","X")),
-               sl.lib = c("SL.glm")) 
+  phi2 <- aipw(a = data_val$A, y = data_val$Y, 
+               x = subset(data_val, select = c("W.star","X"))) 
   
-  tau_ep_val <- psi1$ATE
-  tau_ep_main <- psi2$ATE
+  tau_ep_main <- phi1$ATE
+  tau_ep_val <- phi2$ATE
   
   # Step 3: estimate Gamma and V
-  phi_main <- psi1$EIF
-  phi_val <- psi2$EIF
+  phi_main <- phi1$EIF
+  phi_val <- phi2$EIF
   
   # Get sample sizes
   n_main <- length(phi_main)
   n_val <- length(phi_val)
   
   # Estimate Gamma
-  gamma_hat <- (1 - n_val/n_main)*(1/n_val)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
+  gamma_hat <- (1 - n_val/n_main)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
   
   # Estimate V
-  V_hat <- (1 - n_val/n_main)*(1/n_val)*mean(demean(phi_main)^2)
+  V_hat <- (1 - n_val/n_main)*mean(demean(phi_main)^2)
   
   ## Step 4: subtract off (may need to flip the subtraction sign)
-  tau_cv <- tau_hat_val - (gamma_hat/V_hat)*(tau_ep_main - tau_ep_val)
+  tau_cv <- tau_hat_val - (gamma_hat/V_hat)*(tau_ep_val - tau_ep_main)
   
   # Get variance estimate and 95% CI
-  var_hat <- v_hat - gamma_hat^2/V_hat
+  var_hat <- (v_hat*n_val - gamma_hat^2/V_hat)/n_val
   ci_low <- tau_cv - qnorm(0.975)*sqrt(var_hat)
   ci_high <- tau_cv + qnorm(0.975)*sqrt(var_hat)
   

@@ -6,29 +6,28 @@
 library(ggplot2)
 
 rm(list=ls())
-source('exposure_plotting_functions.R')
+source('~/Github/ME-Causal-Review/R/error_exposure/plotting_functions.R')
 
 # Merge most recent round with previous
-opcharspath <- "../../output/sim_results/exposure/sim_results_2023-03-28_20-19-25.csv"
+opcharspath <- "~/Github/ME-Causal-Review/output/sim_results/exposure_results.csv"
 df <- read.csv(opcharspath)
 
-df %>% ggplot(aes(x=u, y=bias, group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'Percent bias, varying M.E. variance',
-       x='M.E. variance',
-       y='Percent Bias') +
-  theme(legend.position = 'bottom')
+df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "outcome", 
+                                   values_to = "value") %>%
+  mutate(outcome=replace(outcome, outcome=='bias','% Bias'),
+         outcome=replace(outcome, outcome=='ci_cov','C.I. Coverage'),
+         outcome=replace(outcome, outcome=='rmse','RMSE'),
+         ba=as.character(ba)) %>%
+  mutate(ba=replace(ba,ba=='-0.5','Small Treatment Effect'),
+         ba=replace(ba,ba=='1','Large Treatment Effect'))
 
-df %>% filter(method!='Naive') %>% ggplot(aes(x=u, y=bias, group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'Percent bias, varying M.E. variance',
-       x='M.E. variance',
-       y='Percent Bias') +
-  theme(legend.position = 'bottom')
+grid_plot_bin <- df_long_con %>% filter(n == 1000) %>%
+  ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +
+  geom_line() + 
+  facet_grid(outcome ~ as.factor(ba), scales='free') +
+  theme_bw() + labs(x='Measurement error variance',
+                    y='',
+                    color='Method',
+                    title='Simulation Results: Exposure Error') +
+  theme(legend.position='bottom') ; grid_plot_bin
 
-df %>% filter(method!='Naive') %>% ggplot(aes(x=u, y=sqrt(mse), group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'MSE, varying M.E. variance',
-       x='M.E. variance',
-       y='MSE') +
-  theme(legend.position = 'bottom')

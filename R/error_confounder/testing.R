@@ -34,23 +34,21 @@ cv <- ate_cv(data)
 # Test the get_results() function
 # ------------------------------------------------
 
-methods <- c('psc','iv','cv') 
+methods <- c('rc','mime','simex','iv','cv') 
 sig_u_grid <- c(0.1,0.3,0.5,0.9) 
 aw_grid = c(0.5)
 ba_grid <- c(1)
-bw_grid <- c(-1)
-n_grid <- c(2000)
+n_grid <- c(1000)
 rho_grid <- c(0.5)
 
 op_chars <- get_results(methods,
                         sig_u_grid,
                         aw_grid,
                         ba_grid,
-                        bw_grid,
                         n_grid, 
                         rho_grid, 
-                        mc.cores = 1,
-                        nsim = 100)
+                        mc.cores = 10,
+                        nsim = 10)
 
 # ------------------------------
 # Plot 
