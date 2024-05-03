@@ -19,12 +19,15 @@ df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "out
          outcome=replace(outcome, outcome=='rmse','RMSE'),
          ba=as.character(ba)) %>%
   mutate(ba=replace(ba,ba=='-0.5','Small Treatment Effect'),
-         ba=replace(ba,ba=='1','Large Treatment Effect'))
+         ba=replace(ba,ba=='1','Large Treatment Effect'),
+         mis=replace(mis,mis=="ps-mis", "Misspecified Propensity Score"),
+         mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
+         mis=replace(mis,mis=="base", "Both Models Correct"))
 
-grid_plot_bin <- df_long_con %>% filter(n == 1000) %>%
+grid_plot_bin <- df_long_con %>% filter(n == 1000 & ba == "Large Treatment Effect") %>%
   ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +
   geom_line() + 
-  facet_grid(outcome ~ as.factor(ba), scales='free') +
+  facet_grid(outcome ~ as.factor(mis), scales='free') +
   theme_bw() + labs(x='Measurement error variance',
                     y='',
                     color='Method',

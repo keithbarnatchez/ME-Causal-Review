@@ -31,7 +31,10 @@ df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "out
   mutate(aw=replace(aw,aw=='0.25','Low confounding'),
          aw=replace(aw,aw=='0.75','High confounding'),
          rho=replace(rho,rho=='0.15','corr(W,X) = 0.15'),
-         rho=replace(rho,rho=='0.85','corr(W,X) = 0.85'))
+         rho=replace(rho,rho=='0.85','corr(W,X) = 0.85'),
+         mis=replace(mis,mis=="ps-mis", "Misspecified Propensity Score"),
+         mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
+         mis=replace(mis,mis=="base", "Both Models Correct"))
 
 
 grid_plot_bin <- df_long_con %>% filter(bw == 0.25 & n == 1000) %>%

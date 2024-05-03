@@ -34,14 +34,16 @@ sig_u_grid <- c(0.1,0.25,0.5,0.75,0.9)
 ba_grid <- c(-0.5, 1) # effect of a in the outcome
 bw_grid <- c(-1) # coef of w in the outcome model
 aw_grid <- c(0.5) # coef of w in the ps model
+mis_grid <- c("base", "ps-mis", "out-mis")
 n_grid <- c(1000) # sample size
 
 op_chars <- get_results(methods,
-                        sig_u_grid,
-                        ba_grid,
-                        aw_grid,
-                        bw_grid,
-                        n_grid, 
+                        sig_u_grid = sig_u_grid,
+                        ba_grid = ba_grid,
+                        aw_grid = aw_grid,
+                        bw_grid = bw_grid,
+                        mis_grid = mis_grid,
+                        n_grid = n_grid, 
                         mc.cores = 24,
                         nsim = 500)
 

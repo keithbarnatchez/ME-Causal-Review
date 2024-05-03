@@ -26,12 +26,19 @@ meas_model <- function(A, sig_u) {
   
 }
 
-trt_model <- function(W, X, V, aw = 0.5, ax = -0.5, av = 0.25, a0 = 0) {
+trt_model <- function(W, X, V, aw = 0.5, ax = -0.5, av = 0.25, a0 = 0, misspecify = FALSE) {
   
   #' Generates treatment model for T with error-prone exposure X and 
   #' properly-measured exposure Z
   
-  mu <- a0 + aw*W + ax*X + av*V
+  if (misspecify) {
+    W. <- scale(((W + X)/4)^2) 
+    X. <- scale(abs(W*X))
+    mu <- a0 + aw*W. + ax*X. + av*V
+  } else {
+    mu <- a0 + aw*W + ax*X + av*V
+  }
+  
   A <- rnorm(length(X), mean = mu, sd = 1) 
   return(A)
   
@@ -39,7 +46,7 @@ trt_model <- function(W, X, V, aw = 0.5, ax = -0.5, av = 0.25, a0 = 0) {
 
 out_model <- function(A, W, X, sig_e = 1, binary = FALSE,
                       ba = 1, bw = -1, bx = 0.5, b0 = 0,
-                      baw = 0.25, bax = -0.25) {
+                      baw = 0.25, bax = -0.25, misspecify = FALSE) {
   
   #' Generate Y from N(mu,sig_e) where mu is a linear function of T, X and Z
   #' INPUTS:
@@ -51,14 +58,25 @@ out_model <- function(A, W, X, sig_e = 1, binary = FALSE,
   #' - a vector containing simulated values of the outcome Y, given the specified
   #'   dgp (governed by the user-supplied parameters)
   
-  mu <- b0 + ba*A + bw*W + bx*X + baw*A*W + bax*A*X
-  
   if (!binary) { # if continuous outcome
-    return(rnorm(length(A), mean = mu, sd = sig_e))
-  }  else { #if binary outcome
-    testit::assert((ba < 1) & (0 < boa) ) # make sure effect of a is < 1
-    p <- (1 - ba)*expit(b0 + bw*W + bx*X) + ba*A
-    return(rbinom(length(X), size=1, prob = p)  )
+    
+    if (misspecify) {
+      W. <- scale((W + X)^2) 
+      X. <- scale(abs(W*X))
+      mu <- b0 + ba*A + bw*W. + bx*X. + baw*A*W. + bax*A*X.
+    } else {
+      mu <- b0 + ba*A + bw*W + bx*X + baw*A*W + bax*A*X
+    }
+    
+    Y <- rnorm(length(W), mean = mu, sd = sig_e)
+    return(Y)
+    
+  } else { # if binary outcome
+    
+    testit::assert( (ba < 1) & (0 < ba) ) # make sure effect of a is < 1s
+    mu <- (1 - A)*expit(b0 + bw*W + bx*X) + A*ba
+    return(rbinom(length(W), size = 1, prob = mu) )
+    
   }
   
 }
@@ -88,7 +106,7 @@ generate_data <- function(n, sig_e = 1, sig_u = 0.1,
                           rho = 0.5, psi = -0.25,
                           aw = 0.5, ax = -0.5, av = 0.25, a0 = 0,
                           ba = 1, bw = -1, bx = 0.5, b0 = 0,
-                          baw = 0.25, bax = -0.25,
+                          baw = 0.25, bax = -0.25, mis = "base",
                           v_share = 0.2, binary = FALSE) {
   
   #' Generates dataset with outcome variable y, error-prone exposure X with 
@@ -114,13 +132,15 @@ generate_data <- function(n, sig_e = 1, sig_u = 0.1,
   W <- covariates[,1] ; X <- covariates[,2] ; V <- covariates[,3]
   
   # Simulate treatment process
-  A <- trt_model(W = W, X = X, V = V, aw = aw, ax = ax, av = av, a0 = a0)
+  A <- trt_model(W = W, X = X, V = V, aw = aw, ax = ax, av = av, a0 = a0,
+                 misspecify = (mis == "ps-mis"))
   
   # Simulate outcome 
   Y <- out_model(A = A, W = W, X = X, 
                  ba = ba, bw = bw, baw = baw,
                  bx = bx, bax = bax, b0 = b0, 
-                 sig_e = sig_e, binary = binary)
+                 sig_e = sig_e, binary = binary,
+                 misspecify = (mis == "out-mis"))
   
   # Simulate error-prone measurements
   A.star <- meas_model(A, sig_u) 

@@ -40,14 +40,16 @@ sig_u_grid <- c(0.1,0.3,0.5,0.9)
 ba_grid <- c(-1)
 aw_grid <- 0.5
 bw_grid <- -0.5
+mis_grid <- c("ps-mis")
 n_grid <- c(2000)
 
 op_chars <- get_results(methods,
-                        sig_u_grid,
-                        ba_grid, 
-                        aw_grid, 
-                        bw_grid,
-                        n_grid, 
+                        sig_u_grid = sig_u_grid,
+                        ba_grid = ba_grid, 
+                        aw_grid = aw_grid, 
+                        bw_grid = bw_grid,
+                        mis_grid = mis_grid,
+                        n_grid = n_grid, 
                         mc.cores = 24,
                         nsim = 100)
 

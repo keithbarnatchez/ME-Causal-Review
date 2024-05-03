@@ -22,7 +22,7 @@ srf <- function(y, x, a, delta, family = gaussian(),
   mutilde <- c(predict(mumod, newdata = data.frame(x, a = a + delta))$pred)
   
   # GPS model
-  pimod <- SuperLearner(Y = a, X = x, SL.library = sl.lib)
+  pimod <- SuperLearner(Y = a, X = x, SL.library = "SL.glm")
   pimod.vals <- pimod$SL.predict
   pimod.sd <- sd(a - pimod.vals)
   
@@ -48,8 +48,9 @@ srf <- function(y, x, a, delta, family = gaussian(),
   lower_ci <- theta - sqrt(omega2)*qnorm(0.975)
   upper_ci <- theta + sqrt(omega2)*qnorm(0.975)
   
-  return(list(EST = theta, CI = c(lower_ci, upper_ci), 
-              VAR = omega2, EIF = theta_eif))
+  return(list(EST = theta,VAR = omega2,
+              CI = c(lower_ci, upper_ci), 
+              EIF = theta_eif))
     
   
 }

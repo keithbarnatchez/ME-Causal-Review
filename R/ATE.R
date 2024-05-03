@@ -110,7 +110,7 @@ aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.
   lower_ci <- ATE_hat - sqrt(Vhat)*qnorm(0.975)
   upper_ci <- ATE_hat + sqrt(Vhat)*qnorm(0.975)
   
-  return(list(ATE = ATE_hat, VAR = Vhat, 
+  return(list(EST = ATE_hat, VAR = Vhat, 
               CI = c(lower_ci, upper_ci),
               EIF = EIF_hat))
   

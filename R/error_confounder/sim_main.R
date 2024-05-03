@@ -26,7 +26,7 @@ library(parallel)
 source('~/Github/ME-Causal-Review/R/error_confounder/correction_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/data_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/output_functions.R')
-source('~/Github/ME-Causal-Review/R/ATE.R')
+source('~/Github/ME-Causal-Review/R/SRF.R')
 
 options(show.error.locations = TRUE)
 # ------------------------------------------------------------------------------
@@ -40,23 +40,24 @@ fullpath <- paste(simdir, flnm, sep = '') # construct path to final file name
 
 # ------------------------------------------------------------------------------
 # Set up simulation parameters
-methods <- c('rc', 'simex', 'iv', 'mime', 'cv') 
+methods <- c('rc', 'mime', 'simex', 'iv', 'cv') 
 sig_u_grid <- c(0.1, 0.25, 0.5, 0.75, 0.9) # ME variances
 ba_grid <- c(1) # treatment effect
-aw_grid <- c(0.5, 1) # coef of w in the ps model
-n_grid <- c(1000, 2000) # sample size
+aw_grid <- c(0.75) # coef of w in the ps model
+mis_grid <- c("base", "ps-mis", "out-mis") # coef of w in the ps model
+n_grid <- c(1000) # sample size
 rho_grid <- c(0.15, 0.85) # high and low numbers on (-1,1)
 
 
 # ------------------------------------------------------------------------------
 # Run simulations, store results
 op_chars <- get_results(methods,
-                        sig_u_grid,
-                        ba_grid,
-                        aw_grid,
-                        bw_grid,
-                        n_grid, 
-                        rho_grid, 
+                        sig_u_grid = sig_u_grid,
+                        ba_grid = ba_grid,
+                        aw_grid = aw_grid,
+                        mis_grid = mis_grid,
+                        n_grid = n_grid, 
+                        rho_grid = rho_grid, 
                         mc.cores = 24,
                         nsim = 500)
 

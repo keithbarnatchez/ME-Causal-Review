@@ -237,7 +237,7 @@ srf_cv <- function(data) {
   n_val <- length(phi_val)
   
   # Estimate Gamma
-  IF <- cbind(demean(phi_val), demean(varphi_val))
+  IF <- cbind(phi_val, varphi_val)
   IF <- IF[complete.cases(IF),]
   gamma_hat <- (1 - n_val/n_main)*cov(IF)[1,2]
   

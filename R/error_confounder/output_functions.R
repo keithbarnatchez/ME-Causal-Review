@@ -5,9 +5,9 @@
 # - percent bias
 # - rmse
 # - effect estimate
-# - ATE variance
+# - EST variance
 
-calc_stats <- function(data, methods, a, s) {
+calc_stats <- function(data, methods, true_effect, sim) {
   
   #' Calculates stats of interest for specified correction methods and updates 
   #' existing dataframe containing stats across simulation iterations
@@ -23,11 +23,11 @@ calc_stats <- function(data, methods, a, s) {
   #' 
   
   # Ideal and naive
-  ATE_ideal <- ate_ideal(data) ; ATE_naive <- ate_naive(data)
-  CI_ideal <- ATE_ideal[[3]] ; CI_naive <- ATE_naive[[3]]
+  EST_ideal <- srf_ideal(data) ; EST_naive <- srf_naive(data)
+  CI_ideal <- EST_ideal[[3]] ; CI_naive <- EST_naive[[3]]
   
   # Bias
-  bias_ideal <- ATE_ideal[[1]] - true_effect ; bias_naive <- ATE_naive[[1]] - true_effect
+  bias_ideal <- EST_ideal[[1]] - true_effect ; bias_naive <- EST_naive[[1]] - true_effect
   
   # CI coverage
   ci_cov_ideal <- ifelse( (CI_ideal[1] <= true_effect) & (CI_ideal[2] >= true_effect) , 1, 0)
@@ -37,88 +37,88 @@ calc_stats <- function(data, methods, a, s) {
   pow_ideal <- ifelse(CI_ideal[1] > 0 | CI_ideal[2] < 0, 1, 0) 
   pow_naive <- ifelse(CI_naive[1] > 0 | CI_naive[2] < 0, 1, 0) 
   
-  stats <- data.frame(bias = bias_ideal, ATE = ATE_ideal[[1]], 
+  stats <- data.frame(bias = bias_ideal, EST = EST_ideal[[1]], 
                       ci_cov = ci_cov_ideal, pow = pow_ideal, 
-                      method = 'Ideal', iteration = s)
-  stats <- rbind(stats, data.frame(bias = bias_naive, ATE = ATE_naive[[1]],
+                      method = 'Ideal', iteration = sim)
+  stats <- rbind(stats, data.frame(bias = bias_naive, EST = EST_naive[[1]],
                                    ci_cov = ci_cov_naive, pow = pow_naive,
-                                   method = 'Naive', iteration = s))
+                                   method = 'Naive', iteration = sim))
                          
   # Propensity Score Calibration
   if ('psc' %in% methods) {
     
-    ATE <- ate_psc(data) 
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_psc(data) 
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE=ATE[[1]], 
+    stats <- rbind(stats, data.frame(bias = bias, EST=EST[[1]], 
                                      ci_cov = ci_cov, pow = pow,
-                                     method = 'PSC', iteration = s)) 
+                                     method = 'PSC', iteration = sim)) 
   
   }
   
   # Regression Calibration
   if ('rc' %in% methods) {
     
-    ATE <- ate_rc(data, method = "aipw") 
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_rc(data) 
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]], 
+    stats <- rbind(stats, data.frame(bias = bias, EST = EST[[1]], 
                                      ci_cov = ci_cov, pow = pow,
-                                     method = 'RC', iteration = s)) 
+                                     method = 'RC', iteration = sim)) 
     
   }
   
   # IV 
   if ('iv' %in% methods) {
     
-    ATE <- ate_iv(data)
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_iv(data)
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0,1,0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
+    stats <- rbind(stats, data.frame(bias = bias, EST = EST[[1]],
                                      ci_cov = ci_cov, pow = pow, 
-                                     method = 'IV', iteration = s))
+                                     method = 'IV', iteration = sim))
     
   }
   
   # SIMEX
   if ('simex' %in% methods) {
     
-    ATE <- ate_simex(data, method = "aipw")
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_simex(data)
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]] > 0 | CI[[2]] < 0, 1, 0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
+    stats <- rbind(stats, data.frame(bias = bias, EST = EST[[1]],
                                      ci_cov = ci_cov, pow = pow,
-                                     method = 'SIMEX', iteration = s))
+                                     method = 'SIMEX', iteration = sim))
     
   }
   
   # MIME 
   if ('mime' %in% methods) {
     
-    ATE <- ate_mime(data, method = "aipw")
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_mime(data)
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1, 0)
     pow <- ifelse(CI[[1]] > 0 | CI[[2]] < 0, 1, 0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE = ATE[[1]],
+    stats <- rbind(stats, data.frame(bias = bias, EST = EST[[1]],
                                      ci_cov = ci_cov, pow = pow, 
-                                     method = 'MIME', iteration = s))
+                                     method = 'MIME', iteration = sim))
     
   }
   
   # CV
   if ('cv' %in% methods) {
     
-    ATE <- ate_cv(data) 
-    bias <- ATE[[1]] - true_effect ; CI <- ATE[[2]]
+    EST <- srf_cv(data) 
+    bias <- EST[[1]] - true_effect ; CI <- EST[[2]]
     ci_cov <- ifelse((CI[1] <= true_effect) & (true_effect <= CI[2]), 1 , 0)
     pow <- ifelse(CI[[1]]>0 | CI[[2]] < 0, 1, 0) # power
-    stats <- rbind(stats, data.frame(bias = bias, ATE=ATE[[1]], 
+    stats <- rbind(stats, data.frame(bias = bias, EST=EST[[1]], 
                                      ci_cov = ci_cov, pow = pow,
-                                     method = 'CV', iteration = s)) 
+                                     method = 'CV', iteration = sim)) 
     
   }
   
@@ -130,7 +130,7 @@ get_results <- function(methods,
                         sig_u_grid, # me variance
                         ba_grid, 
                         aw_grid,
-                        bw_grid, 
+                        mis_grid, 
                         n_grid,     # n
                         rho_grid,   # correlation between confoundersß
                         nsim = 100,
@@ -156,9 +156,9 @@ get_results <- function(methods,
   
   # Initialize dataframe for each stat of interest
   scen_df <- expand.grid(sig_u = sig_u_grid, 
-                         aw = aw_grid,
                          ba = ba_grid,
-                         bw = bw_grid,
+                         aw = aw_grid,
+                         mis = mis_grid,
                          n = n_grid,
                          rho = rho_grid,
                          KEEP.OUT.ATTRS = TRUE, 
@@ -171,7 +171,7 @@ get_results <- function(methods,
     sig_u <- scen$sig_u # me variance
     ba <- scen$ba # effect of exposure on outcome
     aw <- scen$aw # effect of EP confounder on A
-    bw <- scen$bw # effect of EP confounder on Y
+    mis <- scen$mis # effect of EP confounder on Y
     n <- scen$n # sample size
     rho <- scen$rho # rhoary outcome indicator
     
@@ -179,15 +179,15 @@ get_results <- function(methods,
     print(paste(scen))
     
     # Get operating characteristics for current grid point
-    sim_stats_list <- mclapply(1:nsim, function(s, n, sig_u, aw, ba, bw, rho) {
+    sim_stats_list <- mclapply(1:nsim, function(sim, n, sig_u, aw, ba, mis, rho, methods) {
       
       # simulate data for current iteration
-      data <- generate_data(n = n, sig_u = sig_u, rho = rho, aw = aw, bw = bw, ba = ba)
+      data <- generate_data(n = n, sig_u = sig_u, rho = rho, aw = aw, mis = mis, ba = ba)
       
       # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
-      return(calc_stats(data, methods, true_effect = ba, s))
+      return(calc_stats(data, methods = methods, true_effect = ba, sim = sim))
       
-    }, n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, bw = bw, mc.cores = mc.cores) # for s in 1:nsim
+    }, n = n, sig_u = sig_u, rho = rho, aw = aw, ba = ba, mis = mis, methods = methods, mc.cores = mc.cores) # for s in 1:nsim
     
     sim_stats <- do.call(rbind, sim_stats_list)
     
@@ -195,14 +195,14 @@ get_results <- function(methods,
     final_stats <- sim_stats %>% group_by(method) %>%
       summarize(bias = 100*mean(bias/abs(ba), na.rm = T),
                 rmse = sqrt(mean(bias^2, na.rm = T)),
-                estimate = mean(ATE, na.rm = T),
+                estimate = mean(EST, na.rm = T),
                 ci_cov = 100*mean(ci_cov, na.rm = T),
                 power = 100*mean(pow, na.rm = T))
     
     # make note of the grid point
-    final_stats$n = n; final_stats$sig_u = sig_u ; 
+    final_stats$n = n; final_stats$sig_u = sig_u; 
     final_stats$rho = rho; final_stats$aw = aw; 
-    final_stats$ba = ba; final_stats$bw = bw
+    final_stats$ba = ba; final_stats$mis = mis;
 
     return(final_stats)
     

@@ -9,20 +9,20 @@
 #            NAIVE AND IDEAL APPROACH
 # --------------------------------------------------------
 
-ate_ideal <- function(data) {
+srf_ideal <- function(data) {
   
   #' Computes ATE under ideal conditions (using X, correctly specified model)
   #'
   #' Returns ATE estimate
   
   # Estimate ATE
-  mod <- with(data, aipw(a = A, y = Y, x = data.frame(W, X)))
+  mod <- with(data, srf(a = A, y = Y, x = data.frame(W, X), delta = 1))
   
   return(mod)
   
 }
 
-ate_naive <- function(data) {
+srf_naive <- function(data) {
   
   #' Computes ATE when naively using W in place of X in estimating propensity
   #' scores, but with otherwise correctly-specified model
@@ -30,7 +30,7 @@ ate_naive <- function(data) {
   #' Returns ATE estimates
   
   # Estimate ATE
-  mod <- with(data, aipw(a = A, y = Y, x = data.frame(W.star, X)))
+  mod <- with(data, srf(a = A, y = Y, x = data.frame(W.star, X), delta = 1))
   
   return(mod)
   
@@ -63,7 +63,7 @@ psc_implement <- function(data) {
   
 }
 
-ate_psc <- function(data, nboot = 100) {
+srf_psc <- function(data, nboot = 100) {
   
   #' Outer function for the propensity score calibration method. Calls
   #' psc_implement to yield ATE estimate, and psc_bootstrap to obtain con
@@ -76,7 +76,7 @@ ate_psc <- function(data, nboot = 100) {
   B_X <- psc_mods[[2]]$coefficients['ep_ps']
   L_A <- psc_mods[[1]]$coefficients['A']
   L_X <- psc_mods[[1]]$coefficients['ep_ps']
-  ATE_hat <- B_A - L_A*B_X/L_X
+  EST_hat <- B_A - L_A*B_X/L_X
   
   # Bootsrap
   boot <- rep(NA, nboot)
@@ -96,7 +96,7 @@ ate_psc <- function(data, nboot = 100) {
   # Bootstrap to obtain confidence interval
   CI_hat <- quantile(boot, probs = c(0.025, 0.975))
   
-  return(list(ATE = ATE_hat, CI = CI_hat))
+  return(list(EST = EST_hat, CI = CI_hat))
   
 }
 
@@ -104,7 +104,7 @@ ate_psc <- function(data, nboot = 100) {
 #                REGRESSION CALIBRATION
 # ---------------------------------------------------------
 
-ate_rc <- function(data, nboot = 100, method = "aipw") {
+srf_rc <- function(data, nboot = 100) {
   
   #' Standard Regression Calibration
   
@@ -112,12 +112,9 @@ ate_rc <- function(data, nboot = 100, method = "aipw") {
   W.hat <- predict(lm(W ~ W.star + A + X, data = val_data), newdata = data)
   
   # fit error-prone model
-  if (method == "ipw")
-    rc_mod <- with(data, ipw(a = A, y = Y, x = data.frame(W.hat, X)))
-  else if (method == "aipw")
-    rc_mod <- with(data, aipw(a = A, y = Y, x = data.frame(W.hat, X)))
+  rc_mod <- with(data, srf(a = A, y = Y, x = data.frame(W.hat, X), delta = 1))
   
-  ATE_hat <- rc_mod$ATE
+  EST_hat <- rc_mod$EST
   boot <- rep(NA, nboot)
 
   for (b in 1:nboot) {
@@ -127,19 +124,15 @@ ate_rc <- function(data, nboot = 100, method = "aipw") {
     val_data <- data[which(boot_data$val.idx == 1),]
     W.tilde <- predict(lm(W ~ W.star + A + X, data = val_data), newdata = boot_data)
     
-    if (method == "ipw")
-      boot_mod <- with(boot_data, ipw(a = A, y = Y, x = data.frame(W.tilde, X)))
-    else if (method == "aipw")
-      boot_mod <- with(boot_data, aipw(a = A, y = Y, x = data.frame(W.tilde, X)))
-    
-    boot[b] <- boot_mod$ATE
+    boot_mod <- with(boot_data, srf(a = A, y = Y, x = data.frame(W.tilde, X), delta = 1))
+    boot[b] <- boot_mod$EST
 
   }
 
   # Bootstrap to obtain confidence interval
   CI_hat <- quantile(boot, probs = c(0.025, 0.975))
   
-  return(list(ATE = ATE_hat, CI = CI_hat))
+  return(list(EST = EST_hat, CI = CI_hat))
   
 }
 
@@ -147,7 +140,7 @@ ate_rc <- function(data, nboot = 100, method = "aipw") {
 #                          SIMEX
 # ---------------------------------------------------------
 
-ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 2, by = 0.1)) {
+srf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
   
   #' INPUTS:
   #' - data: simulation data
@@ -164,15 +157,12 @@ ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 
     vals <- apply(W.mat, 2, function(W.tmp, A, Z, Y, method) {
       
       # Estimate ATE
-      if (method == "aipw")
-        simex_mod <- aipw(a = A, y = Y, x = data.frame(W.tmp, Z))
-      else if (method == "ipw")
-        simex_mod <- ipw(a = A, y = Y, x = data.frame(W.tmp, Z))
+      simex_mod <- srf(a = A, y = Y, x = data.frame(W.tmp, Z), delta = 1)
       
-      ATE_hat <- simex_mod$ATE
+      EST_hat <- simex_mod$EST
       Vhat <- simex_mod$VAR
       
-      return(c(ATE = ATE_hat, VAR = Vhat))
+      return(c(EST = EST_hat, VAR = Vhat))
       
     }, A = data$A, Z = data$X, Y = data$Y, method = method)
     
@@ -189,14 +179,14 @@ ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 
   Psi <- do.call(c, lapply(l.vals, function(o) o$est))
   Phi <- do.call(c, lapply(l.vals, function(o) o$var))
   
-  ATE_hat <- predict(mgcv::gam(Psi ~ s(lambda, k = k), data = data.frame(Psi = Psi, lambda = lambda)), 
+  EST_hat <- predict(mgcv::gam(Psi ~ s(lambda, k = k), data = data.frame(Psi = Psi, lambda = lambda)), 
                      newdata = data.frame(lambda = -1))
   Vhat <- predict(mgcv::gam(Phi ~ s(lambda, k = k), data = data.frame(Phi = Phi, lambda = lambda)), 
                   newdata = data.frame(lambda = -1))
   
-  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + ATE_hat, qnorm(.975)*sqrt(Vhat) + ATE_hat)
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + EST_hat, qnorm(.975)*sqrt(Vhat) + EST_hat)
   
-  return(list(ATE = ATE_hat, CI = CI_hat))
+  return(list(EST = EST_hat, CI = CI_hat))
   
 }
 
@@ -204,7 +194,7 @@ ate_simex <- function(data, nboot = 50, k = 3, method = "aipw", lambda = seq(0, 
 #                 INSTRUMENTAL VARIABLES
 # --------------------------------------------------------
 
-ate_iv <- function(data) {
+srf_iv <- function(data) {
   
   #' Implements instrumental variables correction 
   #'
@@ -217,7 +207,7 @@ ate_iv <- function(data) {
   # Fit the IV model (first and second stage) with AER package
   iv_mod <- ivreg(Y ~ A + W.star + X | A + V + X, data = data)
   
-  return(list(ATE = iv_mod$coefficients['A'], # point estimate
+  return(list(EST = iv_mod$coefficients['A'], # point estimate
               CI = confint(iv_mod)['A',])) # confidence interval
   
 }
@@ -226,7 +216,7 @@ ate_iv <- function(data) {
 #               MULTIPLE IMPUTATION
 # --------------------------------------------------------
 
-ate_mime <- function(data, m = 50, method = "aipw") {
+srf_mime <- function(data, m = 50) {
   
   #' Performs multiple imputation for ME correction, following Webb-Vargas et 
   #' al. (2015) with the one modification that we assume there is an internal,
@@ -247,12 +237,9 @@ ate_mime <- function(data, m = 50, method = "aipw") {
     curr_data <- complete(imps, d)
     
     # Record ATE estimate and its SE
-    if (method == "ipw")
-      mime_mod <- with(curr_data, ipw(a = A, y = Y, x = data.frame(W, X)))
-    else if (method == "aipw")
-      mime_mod <- with(curr_data, aipw(a = A, y = Y, x = data.frame(W, X)))
+    mime_mod <- with(curr_data, srf(a = A, y = Y, x = data.frame(W, X), delta = 1))
     
-    est <- mime_mod$ATE
+    est <- mime_mod$EST
     var <- mime_mod$VAR
     
     return(c(est = est, var = var))
@@ -264,13 +251,13 @@ ate_mime <- function(data, m = 50, method = "aipw") {
   vars <- vals[2,]
   
   # compute SE est 
-  ATE_hat <- mean(ests) 
-  bw_var <- sum((ests - ATE_hat)^2)/(length(ests)-1) # var bw ests
+  EST_hat <- mean(ests) 
+  bw_var <- sum((ests - EST_hat)^2)/(length(ests)-1) # var bw ests
   wi_var <- mean(vars) # within variance
   Vhat <- wi_var + (1 + (1/length(ests))) * bw_var
-  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + ATE_hat, qnorm(.975)*sqrt(Vhat) + ATE_hat)
+  CI_hat <- c(qnorm(.025)*sqrt(Vhat) + EST_hat, qnorm(.975)*sqrt(Vhat) + EST_hat)
   
-  return(list(ATE = ATE_hat, CI = CI_hat))
+  return(list(EST = EST_hat, CI = CI_hat))
   
 }
 
@@ -278,7 +265,7 @@ ate_mime <- function(data, m = 50, method = "aipw") {
 #                 CONTROL VARIATES
 # --------------------------------------------------------
 
-ate_cv <- function(data) {
+srf_cv <- function(data) {
   
   #' Given a dataframe data (containing a validation data indicator), implements
   #' the control variates method to obtain ATE estimate
@@ -289,29 +276,29 @@ ate_cv <- function(data) {
   #' - a list containing the ATE estimate, variance estimate and 95% CI
   
   demean <- function(vec) {
-    return(vec-mean(vec))
+    return(vec-mean(vec, na.rm = T))
   }
   
   # Keep track of val data
   data_val <- data %>% filter(val.idx == 1)
   
   # Step 1: estimate ATE in validation data
-  psi <- aipw(a = data_val$A, y = data_val$Y, 
+  psi <- srf(a = data_val$A, y = data_val$Y, delta = 1,
               x = subset(data_val, select = c("W","X"))) 
   
-  tau_hat_val <- psi$ATE
+  tau_hat_val <- psi$EST
   v_hat <- psi$VAR
   varphi_val <- psi$EIF
   
   # Step 2: estimate control variates
-  phi1 <- aipw(a = data$A, y = data$Y, 
+  phi1 <- srf(a = data$A, y = data$Y, delta = 1,
                x = subset(data, select = c("W.star","X")))
   
-  phi2 <- aipw(a = data_val$A, y = data_val$Y, 
+  phi2 <- srf(a = data_val$A, y = data_val$Y, delta = 1,
                x = subset(data_val, select = c("W.star","X"))) 
   
-  tau_ep_main <- phi1$ATE
-  tau_ep_val <- phi2$ATE
+  tau_ep_main <- phi1$EST
+  tau_ep_val <- phi2$EST
   
   # Step 3: estimate Gamma and V
   phi_main <- phi1$EIF
@@ -322,10 +309,12 @@ ate_cv <- function(data) {
   n_val <- length(phi_val)
   
   # Estimate Gamma
-  gamma_hat <- (1 - n_val/n_main)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
+  IF <- cbind(phi_val, varphi_val)
+  IF <- IF[complete.cases(IF),]
+  gamma_hat <- (1 - n_val/n_main)*cov(IF)[1,2]
   
   # Estimate V
-  V_hat <- (1 - n_val/n_main)*mean(demean(phi_main)^2)
+  V_hat <- (1 - n_val/n_main)*mean(demean(phi_main)^2, na.rm = TRUE)
   
   ## Step 4: subtract off (may need to flip the subtraction sign)
   tau_cv <- tau_hat_val - (gamma_hat/V_hat)*(tau_ep_val - tau_ep_main)
@@ -336,7 +325,7 @@ ate_cv <- function(data) {
   ci_high <- tau_cv + qnorm(0.975)*sqrt(var_hat)
   
   # Return the ATE est and associated variance
-  return(list(ATE = tau_cv, CI = c(ci_low,ci_high)))
+  return(list(EST = tau_cv, CI = c(ci_low,ci_high)))
   
 }
  

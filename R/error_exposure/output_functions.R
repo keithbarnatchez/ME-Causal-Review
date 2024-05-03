@@ -152,6 +152,7 @@ get_results <- function(methods,
                         ba_grid,    # main tmt effect
                         aw_grid,    # effect of covariate on a
                         bw_grid,
+                        mis_grid,
                         n_grid,   # sample size
                         nsim = 100,
                         mc.cores = 1) {
@@ -177,6 +178,7 @@ get_results <- function(methods,
                          ba = ba_grid, 
                          aw = aw_grid, 
                          bw = bw_grid,
+                         mis = mis_grid,
                          n = n_grid,
                          KEEP.OUT.ATTRS = TRUE, 
                          stringsAsFactors = FALSE)
@@ -189,21 +191,22 @@ get_results <- function(methods,
     ba <- scen$ba # effect of exposure on outcome
     aw <- scen$aw # effect size of confounder in gps
     bw <- scen$aw # effect size of confounder in om
+    mis <- scen$mis # effect of EP confounder on Y
     n <- scen$n # sample size
 
     # Keep track of progress
     print(paste(scen))
     
     # set up dataframe for calculating operating characteristics by group
-    sim_stats_list <- mclapply(1:nsim, function(sim, n, sig_u, ba, aw, bw, methods, ...) {
+    sim_stats_list <- mclapply(1:nsim, function(sim, n, sig_u, ba, aw, bw, mis, methods, ...) {
 
       # simulate data for current iteration
-      data <- generate_data(n = n, sig_u = sig_u, aw = aw, bw = bw, ba = ba)
+      data <- generate_data(n = n, sig_u = sig_u, aw = aw, bw = bw, ba = ba, mis = mis)
       
       # Calculate stats of interest (e.g. bias, whether CI covers true param val, etc)
       return(calc_stats(data = data, methods = methods, true_effect = ba, sim = sim))
       
-    }, n = n, sig_u = sig_u, ba = ba, aw = aw, bw = bw, methods = methods, mc.cores = mc.cores) # for s in 1:nsim
+    }, n = n, sig_u = sig_u, ba = ba, aw = aw, bw = bw, mis = mis, methods = methods, mc.cores = mc.cores) # for s in 1:nsim
     
     sim_stats <- do.call(rbind, sim_stats_list)
     
@@ -217,7 +220,7 @@ get_results <- function(methods,
     
     # make note of the grid point
     final_stats$n = n; final_stats$sig_u = sig_u; final_stats$ba = ba;  
-    final_stats$aw = aw; final_stats$bw = bw;
+    final_stats$aw = aw; final_stats$bw = bw; final_stats$mis = mis;
     
     return(final_stats)
     
