@@ -1,10 +1,9 @@
-# Quadratic Program for matching adjusted indirect comparisons
-
-#' Quadratic program for nonparametric matching adjusted indirect comparisons
+# Stochastic intervention estimator
 #' @param y length n vector of observations
 #' @param x n x d matrix of covariates
 #' @param a length n vector of exposures
-#' @param a.new length n vector of exposures under exposure shift
+#' @param delta exposure shift
+#' @param sl.lib SuperLearner libraries for fitting nuisance models
 #' @param ... Extra arguments for osqp solver
 #' @export
 

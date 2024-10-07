@@ -1,14 +1,11 @@
 # create_plots_tables.R
 #
 # This file allows users to create <...>
-#
-#
+library(ggplot2)
+library(tidyr)
+
 rm(list=ls())
 source('~/Github/ME-Causal-Review/R/error_confounder/plotting_functions.R')
-# merge_op_chars <- TRUE
-# if (merge_op_chars) {
-#   files <- list.files(path="path/to/dir", pattern="*.txt", full.names=TRUE, recursive=FALSE)
-# }
 
 # Merge most recent round with previous
 # df1 <- read.csv('../../output/sim_results/res_merged.csv')
@@ -36,18 +33,15 @@ df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "out
          mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
          mis=replace(mis,mis=="base", "Both Models Correct"))
 
-
-grid_plot_bin <- df_long_con %>% filter(bw == 0.25 & n == 1000) %>%
+df_long_con <- subset(df_long_con, !(method %in% c("SIMEX", "Naive") & outcome %in% c("C.I. Coverage", "RMSE")))
+ 
+grid_plot_bin <- df_long_con %>% filter(ba == 1 & n == 1000 & mis == "Both Models Correct") %>%
   ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +
   geom_line() + 
-  facet_grid(outcome ~ as.factor(aw) + as.factor(rho), scales='free') +
+  facet_grid(outcome ~ as.factor(rho), scales='free') +
   theme_bw() + labs(x='Measurement error variance',
                     y='',
                     color='Method',
-                    title='Simulation results: binary outcome') +
+                    title='Simulation Results: Confounder Error') +
   theme(legend.position='bottom') ; grid_plot_bin
-
-ggsave('../../output/figures/grid_plot_binY.pdf',
-       grid_plot_bin,
-       width=7,height = 5,units='in')
 

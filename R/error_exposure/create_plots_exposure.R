@@ -4,6 +4,7 @@
 #
 #
 library(ggplot2)
+library(tidyr)
 
 rm(list=ls())
 source('~/Github/ME-Causal-Review/R/error_exposure/plotting_functions.R')
@@ -23,6 +24,8 @@ df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "out
          mis=replace(mis,mis=="ps-mis", "Misspecified Propensity Score"),
          mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
          mis=replace(mis,mis=="base", "Both Models Correct"))
+
+df_long_con <- subset(df_long_con, !(method %in% c("SIMEX", "Naive") & outcome %in% c("C.I. Coverage", "RMSE")))
 
 grid_plot_bin <- df_long_con %>% filter(n == 1000 & ba == "Large Treatment Effect") %>%
   ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +

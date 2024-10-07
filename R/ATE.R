@@ -1,7 +1,4 @@
-# ---------------------------------------------------------
-# UTILITY FUNCTIONS
-# ---------------------------------------------------------
-
+# inverse probability  of treatment estimator of the ATE
 ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction")) {
   
   if (is.null(pihat)) { # if aren't pre-supplying propensity scores
@@ -64,17 +61,8 @@ ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.i
   
 }
 
-aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction")) {
-  
-  #' Main function for implementing AIPW estimator.
-  #' 
-  #' INPUTS: 
-  #' - data: A dataframe created by the generate_data() function
-  #' - methods: Character vector with libraries to feed into SuperLearner. By
-  #'            default, we just use regular glm (no non-parametric stuff)
-  #'
-  #' Outputs:
-  #' - Estimate of the ATE
+# Augmented inverse probability weight estimator
+aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.gam", "SL.glm.interaction")) {
   
   # Outcome model
   outcome_model <- SuperLearner(Y = y, X = data.frame(a = a, x),
