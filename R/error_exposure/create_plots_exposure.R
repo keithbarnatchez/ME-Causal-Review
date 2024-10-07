@@ -4,31 +4,36 @@
 #
 #
 library(ggplot2)
+library(tidyr)
 
 rm(list=ls())
-source('exposure_plotting_functions.R')
+source('~/Github/ME-Causal-Review/R/error_exposure/plotting_functions.R')
 
 # Merge most recent round with previous
-opcharspath <- "../../output/sim_results/exposure/sim_results_2023-03-28_20-19-25.csv"
+opcharspath <- "~/Github/ME-Causal-Review/output/sim_results/exposure_results.csv"
 df <- read.csv(opcharspath)
 
-df %>% ggplot(aes(x=u, y=bias, group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'Percent bias, varying M.E. variance',
-       x='M.E. variance',
-       y='Percent Bias') +
-  theme(legend.position = 'bottom')
+df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "outcome", 
+                                   values_to = "value") %>%
+  mutate(outcome=replace(outcome, outcome=='bias','% Bias'),
+         outcome=replace(outcome, outcome=='ci_cov','C.I. Coverage'),
+         outcome=replace(outcome, outcome=='rmse','RMSE'),
+         ba=as.character(ba)) %>%
+  mutate(ba=replace(ba,ba=='-0.5','Small Treatment Effect'),
+         ba=replace(ba,ba=='1','Large Treatment Effect'),
+         mis=replace(mis,mis=="ps-mis", "Misspecified Propensity Score"),
+         mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
+         mis=replace(mis,mis=="base", "Both Models Correct"))
 
-df %>% filter(method!='Naive') %>% ggplot(aes(x=u, y=bias, group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'Percent bias, varying M.E. variance',
-       x='M.E. variance',
-       y='Percent Bias') +
-  theme(legend.position = 'bottom')
+df_long_con <- subset(df_long_con, !(method %in% c("SIMEX", "Naive") & outcome %in% c("C.I. Coverage", "RMSE")))
 
-df %>% filter(method!='Naive') %>% ggplot(aes(x=u, y=sqrt(mse), group=method, color=method)) + geom_point() +
-  geom_line() + theme_bw() + 
-  labs(title = 'MSE, varying M.E. variance',
-       x='M.E. variance',
-       y='MSE') +
-  theme(legend.position = 'bottom')
+grid_plot_bin <- df_long_con %>% filter(n == 1000 & ba == "Large Treatment Effect") %>%
+  ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +
+  geom_line() + 
+  facet_grid(outcome ~ as.factor(mis), scales='free') +
+  theme_bw() + labs(x='Measurement error variance',
+                    y='',
+                    color='Method',
+                    title='Simulation Results: Exposure Error') +
+  theme(legend.position='bottom') ; grid_plot_bin
+

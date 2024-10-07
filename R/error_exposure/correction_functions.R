@@ -9,122 +9,21 @@
 #            NAIVE AND IDEAL APPROACH
 # --------------------------------------------------------
 
-erf_ideal <- function(data) {
+srf_ideal <- function(data) {
   
   # Use erf() function to estimate contrast
-  results <- with(data, erf(y = Y, a = A, x = data.frame(W, X), a1 = 1, a0 = 0))
+  results <- with(data, srf(y = Y, a = A, x = data.frame(W, X), delta = 1))
   return(results)
   
 }
 
-erf_naive <- function(data, sl.lib, family = gaussian()) {
+srf_naive <- function(data, sl.lib, family = gaussian()) {
   
   #' Naively estimates ERF contrast, using mismeasured W in place of true measurements
   
-  # Use erf() function to est ATE
-  results <- with(data, erf(y = Y, a = A.star, x = data.frame(W, X), a1 = 1, a0 = 0,))
+  # Use srf() function to est ATE
+  results <- with(data, srf(y = Y, a = A.star, x = data.frame(W, X), delta = 1))
   return(results)
-  
-}
-
-# ---------------------------------------------------------
-#                CONDITIONAL SCORE METHOD
-# ---------------------------------------------------------
-
-csme_implement <- function(data) {
-  
-  Y <- data$Y
-  A.star <- data$A.star
-  ipw_hat <- data$ipw_hat
-  X <- as.matrix(data %>% select(-c(A.star, Y, ipw_hat)))
-  
-  #data dimensions
-  n <- nrow(X)
-  p <- ncol(X)
-  
-  # not confident about the denominator to this estimator
-  condexp <- function(X, alpha, beta, delta, sig2_u, sig2_e) {
-    (c(X %*% alpha) + delta*c(X %*% beta)) /
-      (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
-  }
-  
-  condvar <- function(X, beta, sig2_u, sig2_e) {
-    sig2_e / (1 + c(X %*% beta)^2*c(sig2_u / sig2_e))
-  }
-  
-  function(theta, sig2_u, a0, a1){
-    
-    # model parameters
-    gamma <- theta[1:p]
-    alpha <- theta[(p + 1):(2*p)]
-    beta <- theta[(2*p + 1):(3*p)]
-    sig2_e <- theta[(3*p + 1)]
-    eta <- theta[(3*p + 2)]
-    
-    # gps model uncertainty (questionable whether this is sufficient?)
-    gps_eqn <- crossprod(X, A.star - c(X %*% gamma))
-    
-    # conditional score statistics
-    delta <- A.star + c(sig2_u/sig2_e)*Y*c(X %*% beta)
-    m_A <- condexp(X = X, alpha = alpha, beta = beta, 
-                   delta = delta, sig2_u = sig2_u, sig2_e = sig2_e)
-    v_A <- condvar(X = X, beta = beta, sig2_u = sig2_u, sig2_e = sig2_e)
-    scl <- (Y - m_A)^2 / v_A
-    
-    # outcome model estimating equations
-    ols_eqn1 <- crossprod(X, ipw_hat*(Y - m_A))
-    ols_eqn2 <- crossprod(delta*X, ipw_hat*(Y - m_A))
-    disp_eqn <- crossprod(ipw_hat, sig2_e - sig2_e*scl)
-    
-    # prediction estimating equation
-    pred_eqn <- t(rep(a1 - a0, n)) %*% c(X %*% beta) - eta
-    
-    c(gps_eqn, ols_eqn1, ols_eqn2, disp_eqn, pred_eqn)   
-    
-  }
-  
-}
-
-erf_csme <- function(data) {
-  
-  #' Function for implementing a modified version of the Blette (2022) CSME
-  #' approach
-  #'
-  #' INPUTS:
-  #' - data: Simulation vars from gen_data()
-  sig_u_hat <- with(data, sd(A.star[which(val.idx == 1)] - A[which(val.idx == 1)]))
-  
-  # fit GPS model/get weights
-  denom_mod <- lm(A.star ~ W + X, data = data)
-  p_denom <- predict(denom_mod, type = 'response')
-  dens_denom <- dnorm(data$A.star, p_denom, sigma(denom_mod))
-  num_mod <- lm(A.star ~ 1, data = data)
-  p_num <- predict(num_mod, type = 'response')
-  dens_num <- dnorm(data$A.star, p_num, sigma(denom_mod))
-  data$ipw_hat <- dens_num / dens_denom
-  
-  # set up data frame for m_estimate
-  mdat <- with(data, data.frame("Y" = Y, "A.star" = A.star, 
-                                "ipw_hat" = ipw_hat, "X" = cbind(1, W, X)))
-  
-  # initial predictions
-  outmod <- lm(Y ~ A.star*X + A.star*W, data = data)
-  ipwmod <- lm(Y ~ A.star, weights = ipw_hat, data = data)
-  start <- unname(c(coef(denom_mod), coef(outmod), sigma(outmod)^2, coef(ipwmod)[2]))
-  
-  results_csme <- m_estimate(estFUN = csme_implement, data = mdat,
-                             inner_args = list(sig2_u = (sig_u_hat)^2, a0 = 0, a1 = 1),
-                             root_control = setup_root_control(start = start))
-  
-  idx <- length(results_csme@estimates)
-  
-  # get results of interest
-  Mhat <- coef(results_csme)[idx]
-  Vhat <- vcov(results_csme)[idx, idx]
-  
-  CI_hat <- c(Mhat - 1.96*sqrt(Vhat), Mhat + 1.96*sqrt(Vhat))
-  
-  return(list(EST = Mhat, CI = CI_hat))
   
 }
 
@@ -132,7 +31,7 @@ erf_csme <- function(data) {
 #                REGRESSION CALIBRATION
 # ---------------------------------------------------------
 
-erf_rc <- function(data, nboot = 100) {
+srf_rc <- function(data, nboot = 100) {
   
   #' Regression calibration
   #' 
@@ -148,7 +47,7 @@ erf_rc <- function(data, nboot = 100) {
   A.hat <- predict(lm(A ~ A.star + W + X, data = val_data), newdata = data)
   
   # fit model with calibrated exposures
-  rc_mod <- with(data, erf(a = A.hat, y = Y, x = data.frame(W, X), a1 = 1, a0 = 0))
+  rc_mod <- with(data, srf(a = A.hat, y = Y, x = data.frame(W, X), delta = 1))
   
   Mhat <- rc_mod$EST
   boot <- rep(NA, nboot)
@@ -160,7 +59,7 @@ erf_rc <- function(data, nboot = 100) {
     val_data <- data[which(boot_data$val.idx == 1),]
     boot_data$A.tilde <- predict(lm(A ~ A.star + W + X, data = val_data), newdata = boot_data)
     
-    boot_mod <- with(boot_data, erf(a = A.tilde, y = Y, x = data.frame(W, X), a1 = 1, a0 = 0))
+    boot_mod <- with(boot_data, srf(a = A.tilde, y = Y, x = data.frame(W, X), delta = 1))
     boot[b] <- boot_mod$EST
     
   }
@@ -176,7 +75,7 @@ erf_rc <- function(data, nboot = 100) {
 #                          SIMEX
 # ---------------------------------------------------------
 
-erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
+srf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
   
   sig_u_hat <- with(data, sd(A.star[which(val.idx == 1)] - A[which(val.idx == 1)]))
   
@@ -186,8 +85,8 @@ erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
     
     vals <- apply(A.mat, 2, function(A.tmp, Y, W, Z) {
       
-      # Estimate ERF
-      results <- erf(a = A.tmp, y = Y, x = data.frame(W, Z), a0 = 0, a1 = 1)
+      # Estimate srf
+      results <- srf(a = A.tmp, y = Y, x = data.frame(W, Z), delta = 1)
       Mhat <- results$EST
       Vhat <- results$VAR
       
@@ -223,7 +122,7 @@ erf_simex <- function(data, nboot = 50, k = 3, lambda = seq(0, 2, by = 0.2)) {
 #                 INSTRUMENTAL VARIABLES
 # --------------------------------------------------------
 
-erf_iv <- function(data) {
+srf_iv <- function(data) {
   
   #' Implements instrumental variables correction 
   #'
@@ -248,7 +147,7 @@ erf_iv <- function(data) {
 #               MULTIPLE IMPUTATION
 # --------------------------------------------------------
 
-erf_mime <- function(data, m = 50) {
+srf_mime <- function(data, m = 50) {
   
   #' Performs multiple imputation for ME correction, following Josey et 
   #' al. (2023) but with a validation set
@@ -267,7 +166,7 @@ erf_mime <- function(data, m = 50) {
     curr_data <- complete(imps, d)
     
     # Record ERF estimate and its SE
-    results <- with(curr_data, erf(y = Y, a = A, x = data.frame(W, X), a0 = 0, a1 = 1))
+    results <- with(curr_data, srf(y = Y, a = A, x = data.frame(W, X), delta = 1))
     est <- results$EST
     var <- results$VAR
     
@@ -294,7 +193,7 @@ erf_mime <- function(data, m = 50) {
 #                 CONTROL VARIATES
 # --------------------------------------------------------
 
-erf_cv <- function(data) {
+srf_cv <- function(data) {
   
   #' Given a dataframe data (containing a validation data indicator), implements
   #' the control variates method to obtain ERF estimate
@@ -305,54 +204,51 @@ erf_cv <- function(data) {
   #' - a list containing the ERF estimate, variance estimate and 95% CI
   
   demean <- function(vec) {
-    return(vec-mean(vec))
+    return(vec-mean(vec, na.rm = T))
   }
   
   # Keep track of val data
   data_val <- data %>% filter(val.idx == 1)
   
   # Step 1: estimate ERF in validation data
-  tau_val_mod <- erf(a = data_val$A, y = data_val$Y, 
-                     x = subset(data_val, select = c("W","X")),
-                     a0 = 0, a1 = 1, sl.lib = c("SL.glm")) 
+  psi <- srf(a = data_val$A, y = data_val$Y, delta = 1,
+                     x = subset(data_val, select = c("W","X"))) 
   
-  tau_hat_val <- tau_val_mod$EST
-  v_hat <- tau_val_mod$VAR
-  varphi_val <- tau_val_mod$EIF
+  tau_hat_val <- psi$EST
+  v_hat <- psi$VAR
+  varphi_val <- psi$EIF
   
   # Step 2: estimate control variates
-  psi1 <- erf(a = data$A.star, y = data$Y, 
-              x = subset(data, select = c("W","X")),
-              a0 = 0, a1 = 1, sl.lib = c("SL.glm"))
+  phi1 <- srf(a = data$A.star, y = data$Y, delta = 1,
+              x = subset(data, select = c("W","X")))
   
-  psi2 <- erf(a = data_val$A.star, y = data_val$Y, 
-              x = subset(data_val, select = c("W","X")),
-              a0 = 0, a1 = 1, sl.lib = c("SL.glm"))
+  phi2 <- srf(a = data_val$A.star, y = data_val$Y, delta = 1,
+              x = subset(data_val, select = c("W","X")))
   
-  cv_mods <- list(psi1 = psi1, psi2 = psi2)
-  
-  tau_ep_val <- psi1$EST
-  tau_ep_main <- psi2$EST
+  tau_ep_main <- phi1$EST
+  tau_ep_val <- phi2$EST
   
   # Step 3: estimate Gamma and V
-  phi_main <- psi1$EIF
-  phi_val <- psi2$EIF
+  phi_main <- phi1$EIF
+  phi_val <- phi2$EIF
   
   # Get sample sizes
   n_main <- length(phi_main)
   n_val <- length(phi_val)
   
   # Estimate Gamma
-  gamma_hat <- (1 - n_val/n_main)*(1/n_val)*cov(cbind(demean(phi_val), demean(varphi_val)))[1,2]
+  IF <- cbind(phi_val, varphi_val)
+  IF <- IF[complete.cases(IF),]
+  gamma_hat <- (1 - n_val/n_main)*cov(IF)[1,2]
   
   # Estimate V
-  V_hat <- (1 - n_val/n_main)*(1/n_val)*mean(demean(phi_main)^2)
+  V_hat <- (1 - n_val/n_main)*mean(demean(phi_main)^2, na.rm = TRUE)
   
   ## Step 4: subtract off (may need to flip the subtraction sign)
-  tau_cv <- unname(tau_hat_val - (gamma_hat/V_hat)*(tau_ep_main - tau_ep_val))
+  tau_cv <- unname(tau_hat_val - (gamma_hat/V_hat)*(tau_ep_val - tau_ep_main))
   
   # Get variance estimate and 95% CI
-  var_hat <- v_hat - gamma_hat^2/V_hat
+  var_hat <- (v_hat*n_val - gamma_hat^2/V_hat)/n_val
   ci_low <- tau_cv - qnorm(0.975)*sqrt(var_hat)
   ci_high <- tau_cv + qnorm(0.975)*sqrt(var_hat)
   

@@ -1,14 +1,11 @@
 # create_plots_tables.R
 #
 # This file allows users to create <...>
-#
-#
+library(ggplot2)
+library(tidyr)
+
 rm(list=ls())
-source('plotting_functions.R')
-# merge_op_chars <- TRUE
-# if (merge_op_chars) {
-#   files <- list.files(path="path/to/dir", pattern="*.txt", full.names=TRUE, recursive=FALSE)
-# }
+source('~/Github/ME-Causal-Review/R/error_confounder/plotting_functions.R')
 
 # Merge most recent round with previous
 # df1 <- read.csv('../../output/sim_results/res_merged.csv')
@@ -17,88 +14,34 @@ source('plotting_functions.R')
 # df2 <- df2 %>% filter(method=='SIMEX dir.')
 # df <- rbind(df1,df2)
 # write.csv(df,file='../../output/sim_results/res_merged_1202.csv')
-opcharspath <- "../../output/sim_results/sim_results_2023-06-22_17-24-12.csv"
+opcharspath <- "~/Github/ME-Causal-Review/output/sim_results/confounder_results.csv"
 df <- read.csv(opcharspath)
 
-df <- df %>% mutate(mse=sqrt(mse))
-# df <- df %>% mutate(mse = (ATE-))
 # ------------------------------------------------------------------------------
-df_long_bin <- df %>% filter(b==1) %>% pivot_longer(cols = c(bias, mse, ci_cov), names_to = "outcome", 
+df_long_con <- df %>% pivot_longer(cols = c(bias, rmse, ci_cov), names_to = "outcome", 
                         values_to = "value") %>%
           mutate(outcome=replace(outcome, outcome=='bias','% Bias'),
                  outcome=replace(outcome, outcome=='ci_cov','C.I. Coverage'),
-                 outcome=replace(outcome, outcome=='mse','RMSE'),
-                 ax=as.character(ax),
+                 outcome=replace(outcome, outcome=='rmse','RMSE'),
+                 aw=as.character(aw),
                  rho=as.character(rho)) %>%
-  mutate(ax=replace(ax,ax=='0.25','Low confounding'),
-         ax=replace(ax,ax=='0.75','High confounding'),
-         rho=replace(rho,rho=='0.1','corr(X,Z)=0.1'),
-         rho=replace(rho,rho=='0.8','corr(X,Z)=0.8'))
+  mutate(aw=replace(aw,aw=='0.25','Low confounding'),
+         aw=replace(aw,aw=='0.75','High confounding'),
+         rho=replace(rho,rho=='0.15','corr(W,X) = 0.15'),
+         rho=replace(rho,rho=='0.85','corr(W,X) = 0.85'),
+         mis=replace(mis,mis=="ps-mis", "Misspecified Propensity Score"),
+         mis=replace(mis,mis=="out-mis", "Misspecified Outcome Model"),
+         mis=replace(mis,mis=="base", "Both Models Correct"))
 
-df_long_con <- df %>% filter(b==0) %>% pivot_longer(cols = c(bias, mse, ci_cov), names_to = "outcome", 
-                                                    values_to = "value") %>%
-  mutate(outcome=replace(outcome, outcome=='bias','% Bias'),
-         outcome=replace(outcome, outcome=='ci_cov','C.I. Coverage'),
-         outcome=replace(outcome, outcome=='mse','RMSE'),
-         ax=as.character(ax),
-         rho=as.character(rho)) %>%
-  mutate(ax=replace(ax,ax=='0.25','Low confounding'),
-         ax=replace(ax,ax=='0.75','High confounding'),
-         rho=replace(rho,rho=='0.1','corr(X,Z)=0.1'),
-         rho=replace(rho,rho=='0.8','corr(X,Z)=0.8'))
-
-
-grid_plot_bin <- df_long_bin %>% ggplot(aes(x=u,y=value,color=method))  + geom_point() +
+df_long_con <- subset(df_long_con, !(method %in% c("SIMEX", "Naive") & outcome %in% c("C.I. Coverage", "RMSE")))
+ 
+grid_plot_bin <- df_long_con %>% filter(ba == 1 & n == 1000 & mis == "Both Models Correct") %>%
+  ggplot(aes(x=sig_u,y=value,color=method))  + geom_point() +
   geom_line() + 
-  facet_grid(outcome ~ as.factor(ax) + as.factor(rho), scales='free') +
+  facet_grid(outcome ~ as.factor(rho), scales='free') +
   theme_bw() + labs(x='Measurement error variance',
                     y='',
                     color='Method',
-                    title='Simulation results: binary outcome') +
+                    title='Simulation Results: Confounder Error') +
   theme(legend.position='bottom') ; grid_plot_bin
 
-ggsave('../../output/figures/grid_plot_binY.pdf',
-       grid_plot_bin,
-       width=7,height = 5,units='in')
-
-grid_plot_con <- df_long_con %>% ggplot(aes(x=u,y=value,color=method))  + geom_point() +
-  geom_line() + 
-  facet_grid(outcome ~ as.factor(ax) + as.factor(rho), scales='free') +
-  theme_bw() + labs(x='Measurement error variance',
-                    y='',
-                    color='Method',
-                    title='Simulation results: continuous outcome') +
-  theme(legend.position='bottom') ; grid_plot_con
-
-ggsave('../../output/figures/grid_plot_contY.pdf',
-       grid_plot_con,
-       width=7,height = 5,units='in')
-
-
-  
-
-# Make various line plots
-# c('u','a','n','b','rho','psi','ax')
-defaults <- c(0.25,1,4500,0,0.25,0.5,0.25)
-# ------------------------------------------------------------------------------
-# Vary u
-line_plot(df,'u','bias') # using default values
-line_plot(df,'u','mse')
-line_plot(df,'u','bias',fixed_defaults=defaults) # using default values
-line_plot(df,'u','ci_cov',fixed_defaults=defaults) # using default values
-line_plot(df,'u','mse',fixed_defaults=defaults) # using default values
-
-# ------------------------------------------------------------------------------
-# Vary rho
-line_plot(df,'rho','bias',fixed_defaults=defaults)
-line_plot(df,'rho','bias',fixed_defaults=c(0.9,1,5000,0,0.8,0.5,0.25))
-line_plot(df,'rho','ci_cov',fixed_defaults=c(0.9,1,5000,0,0.8,0.5,0.25))
-line_plot(df,'rho','mse',fixed_defaults=defaults) # using default values
-
-
-# ------------------------------------------------------------------------------
-# Vary psi (this plot makes more sense to alter with just IV)
-
-
-
-# ------------------------------------------------------------------------------

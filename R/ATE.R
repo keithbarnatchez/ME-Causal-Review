@@ -1,8 +1,5 @@
-# ---------------------------------------------------------
-# UTILITY FUNCTIONS
-# ---------------------------------------------------------
-
-ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
+# inverse probability  of treatment estimator of the ATE
+ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.glm.interaction")) {
   
   if (is.null(pihat)) { # if aren't pre-supplying propensity scores
     # Get predicted propensity scores
@@ -64,17 +61,8 @@ ipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
   
 }
 
-aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
-  
-  #' Main function for implementing AIPW estimator.
-  #' 
-  #' INPUTS: 
-  #' - data: A dataframe created by the generate_data() function
-  #' - methods: Character vector with libraries to feed into SuperLearner. By
-  #'            default, we just use regular glm (no non-parametric stuff)
-  #'
-  #' Outputs:
-  #' - Estimate of the ATE
+# Augmented inverse probability weight estimator
+aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm", "SL.gam", "SL.glm.interaction")) {
   
   # Outcome model
   outcome_model <- SuperLearner(Y = y, X = data.frame(a = a, x),
@@ -110,7 +98,7 @@ aipw <- function(a, y, x, pihat = NULL, sl.lib = c("SL.mean", "SL.glm")) {
   lower_ci <- ATE_hat - sqrt(Vhat)*qnorm(0.975)
   upper_ci <- ATE_hat + sqrt(Vhat)*qnorm(0.975)
   
-  return(list(ATE = ATE_hat, VAR = Vhat, 
+  return(list(EST = ATE_hat, VAR = Vhat, 
               CI = c(lower_ci, upper_ci),
               EIF = EIF_hat))
   

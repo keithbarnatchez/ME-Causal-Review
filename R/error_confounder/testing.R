@@ -11,7 +11,7 @@ library(parallel)
 source('~/Github/ME-Causal-Review/R/error_confounder/correction_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/data_functions.R')
 source('~/Github/ME-Causal-Review/R/error_confounder/output_functions.R')
-source('~/Github/ME-Causal-Review/R/ATE.R')
+source('~/Github/ME-Causal-Review/R/SRF.R')
 
 #-------------------------------------------------
 # Test correction functions 
@@ -21,35 +21,34 @@ source('~/Github/ME-Causal-Review/R/ATE.R')
 data <- generate_data(n = 1000, sig_u = 1, binary = FALSE, ba = 1) 
 
 # Get IPW from different approaches
-ideal <- ate_naive(data)
-naive <- ate_ideal(data)
-rc <- ate_rc(data, method = "aipw") # regression calibration 
-psc <- ate_psc(data) # propensity score calibration
-iv <- ate_iv(data) # IV
-mime <- ate_mime(data, method = "aipw")
-simex <- ate_simex(data, method = "aipw")
-cv <- ate_cv(data)
+ideal <- srf_naive(data)
+naive <- srf_ideal(data)
+rc <- srf_rc(data) # regression calibration 
+iv <- srf_iv(data) # IV
+mime <- srf_mime(data) # multiple imputation
+simex <- srf_simex(data) # sim ext.
+cv <- srf_cv(data)
 
 # ------------------------------------------------
 # Test the get_results() function
 # ------------------------------------------------
 
-methods <- c('psc','iv','cv') 
+methods <- c('rc','mime','iv','cv') 
 sig_u_grid <- c(0.1,0.3,0.5,0.9) 
 aw_grid = c(0.5)
+mis_grid = c("out-mis")
 ba_grid <- c(1)
-bw_grid <- c(-1)
-n_grid <- c(2000)
-bin_grid <- c(FALSE)
+n_grid <- c(1000)
+rho_grid <- c(0.5)
 
 op_chars <- get_results(methods,
-                        sig_u_grid,
-                        aw_grid,
-                        ba_grid,
-                        bw_grid,
-                        n_grid, 
-                        bin_grid, 
-                        mc.cores = 1,
+                        sig_u_grid = sig_u_grid,
+                        ba_grid = ba_grid,
+                        aw_grid = aw_grid,
+                        mis_grid = mis_grid,
+                        n_grid = n_grid, 
+                        rho_grid = rho_grid, 
+                        mc.cores = 25,
                         nsim = 100)
 
 # ------------------------------
